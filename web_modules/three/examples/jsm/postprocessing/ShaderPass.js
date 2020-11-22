@@ -1,0 +1,17 @@
+import '../../../../common/EventDispatcher-a257053d.js';
+import '../../../../common/constants-2d5769b7.js';
+import '../../../../common/MathUtils-943fb228.js';
+import '../../../../common/Vector3-df4ff999.js';
+import '../../../../common/Vector2-323a1dbe.js';
+import '../../../../common/BufferGeometry-473ac695.js';
+import '../../../../common/Mesh-b513e325.js';
+import '../../../../common/Object3D-2bcaf382.js';
+import '../../../../common/Matrix3-f848f439.js';
+import '../../../../common/Color-6fe630de.js';
+import '../../../../common/Material-05ed5341.js';
+import '../../../../common/Vector4-50f8032c.js';
+import '../../../../common/Camera-11ffe826.js';
+import '../../../../common/Pass-027607b7.js';
+import '../../../../common/PlaneBufferGeometry-e9373b5e.js';
+import '../../../../common/ShaderMaterial-e2b49877.js';
+export { S as ShaderPass } from '../../../../common/ShaderPass-6057b501.js';
