@@ -102,3 +102,11 @@ dist
 
 # TernJS port file
 .tern-port
+
+.yarn-integrity
+.env
+.env.test
+public/*.js
+.build
+build
+web_modules
