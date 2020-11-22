@@ -1,3 +1,5 @@
+// https://caniuse.com/?search=worker%20module
+// import 'module-workers-polyfill'
 
 import { Scene } from 'three/src/scenes/Scene'
 import { PerspectiveCamera } from 'three/src/cameras/PerspectiveCamera'
@@ -10,6 +12,7 @@ import { AmbientLight } from 'three/src/lights/AmbientLight'
 import { webglRenderer } from './webglRenderer'
 import { gltf } from './gltf'
 import { orbitControls } from './controls/orbit'
+import { physics } from './physics'
 
 const scene = new Scene()
 
@@ -35,17 +38,22 @@ scene.add(ambientLight)
 const controls = orbitControls(camera, webglRenderer.canvas)
 
 const frame = () => {
-  cube.rotation.x += 0.01
-  cube.rotation.y += 0.01
-
+  physics.tick(1 / 60)
   controls.update()
 }
 
 const init = async () => {
   webglRenderer.init(scene, camera)
+  physics.init()
+  
 
   gltf.init('assets/glb/')
-  gltf.append('pixel_room.glb', scene)
+  const bedroom = await gltf.append('pixel_room.glb', scene)
+
+  console.log(bedroom)
+
+  physics.setGround()
+  physics.addBox(cube)
 
   webglRenderer.runRenderLoop(scene, camera, frame)
 }

@@ -11,7 +11,7 @@ const init = (path: string) => {
 const append = async (src: string, scene: Scene) => {
   const gltf = await gltfLoader.loadAsync(src)
   scene.add(gltf.scene)
-  return 
+  return gltf
 }
 
 export const gltf = {
