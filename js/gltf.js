@@ -6,7 +6,7 @@ const init = (path) => {
 const append = async (src, scene) => {
   const gltf2 = await gltfLoader.loadAsync(src);
   scene.add(gltf2.scene);
-  return;
+  return gltf2;
 };
 export const gltf = {
   init,

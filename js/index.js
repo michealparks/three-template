@@ -8,6 +8,7 @@ import {AmbientLight as AmbientLight2} from "../web_modules/three/src/lights/Amb
 import {webglRenderer as webglRenderer2} from "./webglRenderer.js";
 import {gltf as gltf2} from "./gltf.js";
 import {orbitControls} from "./controls/orbit.js";
+import {physics as physics2} from "./physics.js";
 const scene = new Scene2();
 const fov = 50;
 const aspect = window.innerWidth / window.innerHeight;
@@ -26,14 +27,17 @@ const ambientLight = new AmbientLight2(color, intensity);
 scene.add(ambientLight);
 const controls = orbitControls(camera, webglRenderer2.canvas);
 const frame = () => {
-  cube.rotation.x += 0.01;
-  cube.rotation.y += 0.01;
+  physics2.tick(1 / 60);
   controls.update();
 };
 const init = async () => {
   webglRenderer2.init(scene, camera);
+  physics2.init();
   gltf2.init("assets/glb/");
-  gltf2.append("pixel_room.glb", scene);
+  const bedroom = await gltf2.append("pixel_room.glb", scene);
+  console.log(bedroom);
+  physics2.setGround();
+  physics2.addBox(cube);
   webglRenderer2.runRenderLoop(scene, camera, frame);
 };
 init();
