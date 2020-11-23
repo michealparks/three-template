@@ -41,7 +41,7 @@ export default [
     input: 'build/physicsWorker.js',
     output: {
       file: 'dist/physicsWorker.js',
-      format: 'es'
+      format: 'iife'
     },
     plugins: [
       replace({

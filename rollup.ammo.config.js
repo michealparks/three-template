@@ -9,7 +9,7 @@ export default {
   input: 'node_modules/ammo.js/builds/ammo.wasm.js',
   output: [{
     file: 'public/ammo.js',
-    format: 'es'
+    format: 'iife'
   }],
   plugins: [
     alias({
