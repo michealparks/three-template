@@ -2,7 +2,7 @@
 export default {
   mount: {
     public: '/',
-    src: '/js'
+    src: '/'
   },
   plugins: [
     '@snowpack/plugin-typescript',
@@ -14,6 +14,7 @@ export default {
     }]
   ],
   exclude: [
+    'ammo.js',
     '**/node_modules/**/*',
     '**/__tests__/*',
     '**/*.@(spec|test).@(js|mjs)'

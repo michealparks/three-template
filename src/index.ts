@@ -1,6 +1,3 @@
-// https://caniuse.com/?search=worker%20module
-// import 'module-workers-polyfill'
-
 import { Scene } from 'three/src/scenes/Scene'
 import { PerspectiveCamera } from 'three/src/cameras/PerspectiveCamera'
 import { BoxBufferGeometry } from 'three/src/geometries/BoxBufferGeometry'
@@ -25,6 +22,7 @@ const camera = new PerspectiveCamera(fov, aspect, near, far)
 const geometry = new BoxBufferGeometry()
 const material = new MeshStandardMaterial({ color: 0x00ff00 })
 const cube = new Mesh(geometry, material)
+cube.position.y = 5
 scene.add(cube)
 
 camera.position.set(5, 5, 5)
@@ -37,21 +35,26 @@ scene.add(ambientLight)
 
 const controls = orbitControls(camera, webglRenderer.canvas)
 
+let now = 0, dt = 0, then = 0
+
 const frame = () => {
-  physics.tick(1 / 60)
+  now = performance.now()
+  dt = now - then
+  then = now
+
+  physics.tick(dt * 0.001)
   controls.update()
 }
 
 const init = async () => {
   webglRenderer.init(scene, camera)
-  physics.init()
   
+  await physics.init()
 
   gltf.init('assets/glb/')
   const bedroom = await gltf.append('pixel_room.glb', scene)
 
-  console.log(bedroom)
-
+  physics.addBox(bedroom.scene.getObjectByName('Floor'), { mass: 0 })
   physics.setGround()
   physics.addBox(cube)
 
