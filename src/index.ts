@@ -5,11 +5,14 @@ import { MeshStandardMaterial } from 'three/src/materials/MeshStandardMaterial'
 import { Mesh } from 'three/src/objects/Mesh'
 import { Vector3 } from 'three/src/math/Vector3'
 import { AmbientLight } from 'three/src/lights/AmbientLight'
+import Stats from 'three/examples/jsm/libs/stats.module.js'
 
 import { webglRenderer } from './webglRenderer'
 import { gltf } from './gltf'
 import { orbitControls } from './controls/orbit'
 import { physics } from './physics'
+
+let stats: any
 
 const scene = new Scene()
 
@@ -42,21 +45,29 @@ const frame = () => {
   dt = now - then
   then = now
 
+  stats.update()
   physics.tick(dt * 0.001)
   controls.update()
 }
 
 const init = async () => {
-  webglRenderer.init(scene, camera)
-  
-  await physics.init()
-
   gltf.init('assets/glb/')
-  const bedroom = await gltf.append('pixel_room.glb', scene)
+  webglRenderer.init(scene, camera)
 
-  physics.addBox(bedroom.scene.getObjectByName('Floor'), { mass: 0 })
-  physics.setGround()
+  const [bedroom] = await Promise.all([
+    gltf.append('pixel_room.glb', scene),
+    physics.init()
+  ])
+
+  physics.addBox(bedroom.scene.getObjectByName('Floor'), {
+    mass: 0
+  })
+
   physics.addBox(cube)
+
+  // @ts-ignore
+  stats = new Stats()
+  document.body.appendChild(stats.dom)
 
   webglRenderer.runRenderLoop(scene, camera, frame)
 }

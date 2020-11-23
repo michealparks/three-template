@@ -75,13 +75,14 @@ const setGround = () => {
 
 }
 
-const bb = new Box3()
+
 
 const addBox = (mesh: Mesh, config: any = {}) => {
-  const { mass = 1 } = config
+  const { mass = 1, volume } = config
 
   boxes.push(mesh)
 
+  const bb = new Box3()
   bb.setFromObject(mesh)
 
   worker.postMessage({
@@ -89,7 +90,7 @@ const addBox = (mesh: Mesh, config: any = {}) => {
     mass,
     position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
     quaternion: { x: mesh.quaternion.x, y: mesh.quaternion.y, z: mesh.quaternion.z, w: mesh.quaternion.w },
-    volume: { x: bb.max.x - bb.min.x, y: bb.max.y - bb.min.y, z: bb.max.z - bb.min.z }
+    volume: volume || { x: (bb.max.x - bb.min.x) / 2, y: (bb.max.y - bb.min.y) / 2, z: (bb.max.z - bb.min.z) / 2 }
   })
 }
 
