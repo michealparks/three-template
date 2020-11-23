@@ -1,6 +1,8 @@
 import type { Mesh } from 'three/src/objects/Mesh'
+import type { Vector3 } from 'three/src/math/Vector3'
 
 import { Box3 } from 'three/src/math/Box3'
+import type { Scene } from 'three'
 
 const worker = new Worker('physicsWorker.js')
 
@@ -59,7 +61,9 @@ const tickCallback = (e: MessageEvent) => {
 }
 
 const tick = (dt: number) => {
-  if (pendingTick) return
+  if (pendingTick) {
+    return
+  }
 
   pendingTick = true
 
@@ -71,16 +75,32 @@ const tick = (dt: number) => {
   }, [positions.buffer, quaternions.buffer])
 }
 
-const setGround = () => {
+const setRigidbodiesFromScene = (scene: Scene) => {
+  scene.traverse((object) => {
+    const { components = '' } = object.userData
 
+    if (components.includes('static_rigidbody')) {
+      // addBox(object as Mesh, { mass: 0 })
+    } else if (components.includes('rigidbody')) {
+      addBox(object as Mesh)
+    }
+  })
 }
 
+const applyImpulseAtIndex = (i: number, impulse: Vector3) => {
+  worker.postMessage({
+    operation: 'applyImpulseAtIndex',
+    i,
+    impulse: { x: impulse.x, y: impulse.y, z: impulse.z }
+  })
+}
 
-
-const addBox = (mesh: Mesh, config: any = {}) => {
-  const { mass = 1, volume } = config
+const addBox = (mesh: Mesh, opts: any = {}) => {
+  const { mass = 1, volume } = opts
 
   boxes.push(mesh)
+
+  console.log(boxes)
 
   const bb = new Box3()
   bb.setFromObject(mesh)
@@ -97,6 +117,7 @@ const addBox = (mesh: Mesh, config: any = {}) => {
 export const physics = {
   init,
   tick,
-  setGround,
-  addBox
+  setRigidbodiesFromScene,
+  addBox,
+  applyImpulseAtIndex
 }

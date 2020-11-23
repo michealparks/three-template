@@ -15,7 +15,7 @@ let worldTransform: any
 let boxes: any[] = []
 let body: any
 let motionState: any
-let i = 0, ii = 0, l = 0
+let i = 0, l = 0
 let position: any, quaternion: any
 
 const init = async () => {
@@ -65,7 +65,6 @@ const tick = (positions: number[], quaternions: number[]) => {
     quaternions[4 * i + 3] = quaternion.w()
 
     i += 1
-    ii += 1
   }
 
   // @ts-ignore

@@ -59,10 +59,8 @@ const init = async () => {
     physics.init()
   ])
 
-  physics.addBox(bedroom.scene.getObjectByName('Floor'), {
-    mass: 0
-  })
-
+  physics.addBox(bedroom.scene.getObjectByName('Floor'), { mass: 0 })
+  physics.setRigidbodiesFromScene(bedroom.scene)
   physics.addBox(cube)
 
   // @ts-ignore

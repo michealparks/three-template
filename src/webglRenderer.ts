@@ -31,7 +31,7 @@ const fxaaPass = new ShaderPass(FXAAShader)
 
 const init = (scene: Scene, camera: PerspectiveCamera) => {
   renderer.toneMapping = ACESFilmicToneMapping
-  renderer.toneMappingExposure = 3.5
+  // renderer.toneMappingExposure = 3.5
   renderer.outputEncoding = sRGBEncoding
   renderer.physicallyCorrectLights = true
 
