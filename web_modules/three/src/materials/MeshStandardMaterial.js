@@ -1,9 +1,9 @@
 import '../../../common/EventDispatcher-a257053d.js';
-import { m as TangentSpaceNormalMap } from '../../../common/constants-2d5769b7.js';
+import { d as TangentSpaceNormalMap } from '../../../common/constants-4ff93c6e.js';
 import '../../../common/MathUtils-943fb228.js';
 import { V as Vector2 } from '../../../common/Vector2-323a1dbe.js';
 import { C as Color } from '../../../common/Color-6fe630de.js';
-import { M as Material } from '../../../common/Material-05ed5341.js';
+import { M as Material } from '../../../common/Material-7a4fa39f.js';
 
 /**
  * parameters = {

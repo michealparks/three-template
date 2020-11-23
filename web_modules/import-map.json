@@ -1,6 +1,7 @@
 {
   "imports": {
     "three/examples/jsm/controls/OrbitControls": "./three/examples/jsm/controls/OrbitControls.js",
+    "three/examples/jsm/libs/stats.module.js": "./three/examples/jsm/libs/stats.module.js",
     "three/examples/jsm/loaders/GLTFLoader": "./three/examples/jsm/loaders/GLTFLoader.js",
     "three/examples/jsm/postprocessing/EffectComposer": "./three/examples/jsm/postprocessing/EffectComposer.js",
     "three/examples/jsm/postprocessing/RenderPass": "./three/examples/jsm/postprocessing/RenderPass.js",

@@ -5,10 +5,12 @@ import {MeshStandardMaterial as MeshStandardMaterial2} from "./web_modules/three
 import {Mesh as Mesh2} from "./web_modules/three/src/objects/Mesh.js";
 import {Vector3 as Vector32} from "./web_modules/three/src/math/Vector3.js";
 import {AmbientLight as AmbientLight2} from "./web_modules/three/src/lights/AmbientLight.js";
+import Stats from "./web_modules/three/examples/jsm/libs/stats.module.js";
 import {webglRenderer as webglRenderer2} from "./webglRenderer.js";
 import {gltf as gltf2} from "./gltf.js";
 import {orbitControls} from "./controls/orbit.js";
 import {physics as physics2} from "./physics.js";
+let stats;
 const scene = new Scene2();
 const fov = 50;
 const aspect = window.innerWidth / window.innerHeight;
@@ -32,17 +34,23 @@ const frame = () => {
   now = performance.now();
   dt = now - then;
   then = now;
+  stats.update();
   physics2.tick(dt * 1e-3);
   controls.update();
 };
 const init = async () => {
-  webglRenderer2.init(scene, camera);
-  await physics2.init();
   gltf2.init("assets/glb/");
-  const bedroom = await gltf2.append("pixel_room.glb", scene);
-  physics2.addBox(bedroom.scene.getObjectByName("Floor"), {mass: 0});
-  physics2.setGround();
+  webglRenderer2.init(scene, camera);
+  const [bedroom] = await Promise.all([
+    gltf2.append("pixel_room.glb", scene),
+    physics2.init()
+  ]);
+  physics2.addBox(bedroom.scene.getObjectByName("Floor"), {
+    mass: 0
+  });
   physics2.addBox(cube);
+  stats = new Stats();
+  document.body.appendChild(stats.dom);
   webglRenderer2.runRenderLoop(scene, camera, frame);
 };
 init();

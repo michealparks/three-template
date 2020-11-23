@@ -1,12 +1,12 @@
 import '../../../common/EventDispatcher-a257053d.js';
-import '../../../common/constants-2d5769b7.js';
+import '../../../common/constants-4ff93c6e.js';
 import '../../../common/MathUtils-943fb228.js';
 import '../../../common/Vector3-df4ff999.js';
 import '../../../common/Vector2-323a1dbe.js';
-import '../../../common/Box3-205ac6d5.js';
-import '../../../common/BufferGeometry-a26ddb44.js';
 import '../../../common/Object3D-2bcaf382.js';
 import '../../../common/Matrix3-f848f439.js';
-import '../../../common/Color-6fe630de.js';
+import '../../../common/Box3-205ac6d5.js';
 import '../../../common/Vector4-50f8032c.js';
-export { B as BoxBufferGeometry } from '../../../common/BoxBufferGeometry-81c5424f.js';
+import '../../../common/Color-6fe630de.js';
+import '../../../common/BufferGeometry-1ddfff5d.js';
+export { B as BoxBufferGeometry } from '../../../common/BoxBufferGeometry-96ce2544.js';

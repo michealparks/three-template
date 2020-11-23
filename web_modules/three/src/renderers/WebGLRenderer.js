@@ -1,22 +1,25 @@
 import { E as EventDispatcher } from '../../../common/EventDispatcher-a257053d.js';
-import { n as NearestFilter, o as CubeUVReflectionMapping, B as BackSide, g as FrontSide, p as CubeReflectionMapping, l as RGBFormat, R as RGBAFormat, q as NoBlending, c as LinearMipmapLinearFilter, L as LinearFilter, E as EquirectangularReflectionMapping, r as EquirectangularRefractionMapping, t as CubeRefractionMapping, C as ClampToEdgeWrapping, u as NoToneMapping, G as GLSL3, v as CustomToneMapping, k as ACESFilmicToneMapping, w as CineonToneMapping, x as ReinhardToneMapping, y as LinearToneMapping, P as PCFShadowMap, z as PCFSoftShadowMap, V as VSMShadowMap, H as CubeUVRefractionMapping, I as AddOperation, J as MixOperation, f as MultiplyOperation, Q as LogLuvEncoding, W as GammaEncoding, X as RGBDEncoding, Y as RGBM16Encoding, Z as RGBM7Encoding, _ as RGBEEncoding, s as sRGBEncoding, e as LinearEncoding, $ as ObjectSpaceNormalMap, m as TangentSpaceNormalMap, D as DoubleSide, a0 as BasicDepthPacking, a1 as RGBADepthPacking, i as LessEqualDepth, A as AddEquation, a2 as SubtractEquation, a3 as ReverseSubtractEquation, a4 as MinEquation, a5 as MaxEquation, a6 as ZeroFactor, a7 as OneFactor, a8 as SrcColorFactor, h as SrcAlphaFactor, a9 as SrcAlphaSaturateFactor, aa as DstColorFactor, ab as DstAlphaFactor, ac as OneMinusSrcColorFactor, O as OneMinusSrcAlphaFactor, ad as OneMinusDstColorFactor, ae as OneMinusDstAlphaFactor, af as CustomBlending, ag as MultiplyBlending, ah as SubtractiveBlending, ai as AdditiveBlending, N as NormalBlending, aj as CullFaceNone, ak as CullFaceBack, al as CullFaceFront, am as NotEqualDepth, an as GreaterDepth, ao as GreaterEqualDepth, ap as EqualDepth, aq as LessDepth, ar as AlwaysDepth, as as NeverDepth, b as RepeatWrapping, a as MirroredRepeatWrapping, at as NearestMipmapNearestFilter, au as NearestMipmapLinearFilter, av as LinearMipmapNearestFilter, aw as FloatType, ax as UnsignedIntType, ay as UnsignedInt248Type, az as DepthFormat, aA as UnsignedShortType, aB as DepthStencilFormat, aC as HalfFloatType, d as UnsignedByteType, aD as UnsignedShort4444Type, aE as UnsignedShort5551Type, aF as UnsignedShort565Type, aG as ByteType, aH as ShortType, aI as IntType, aJ as AlphaFormat, aK as LuminanceFormat, aL as LuminanceAlphaFormat, aM as RedFormat, aN as RedIntegerFormat, aO as RGFormat, aP as RGIntegerFormat, aQ as RGBIntegerFormat, aR as RGBAIntegerFormat, aS as RGB_S3TC_DXT1_Format, aT as RGBA_S3TC_DXT1_Format, aU as RGBA_S3TC_DXT3_Format, aV as RGBA_S3TC_DXT5_Format, aW as RGB_PVRTC_4BPPV1_Format, aX as RGB_PVRTC_2BPPV1_Format, aY as RGBA_PVRTC_4BPPV1_Format, aZ as RGBA_PVRTC_2BPPV1_Format, a_ as RGB_ETC1_Format, a$ as RGB_ETC2_Format, b0 as RGBA_ETC2_EAC_Format, b1 as RGBA_ASTC_4x4_Format, b2 as RGBA_ASTC_5x4_Format, b3 as RGBA_ASTC_5x5_Format, b4 as RGBA_ASTC_6x5_Format, b5 as RGBA_ASTC_6x6_Format, b6 as RGBA_ASTC_8x5_Format, b7 as RGBA_ASTC_8x6_Format, b8 as RGBA_ASTC_8x8_Format, b9 as RGBA_ASTC_10x5_Format, ba as RGBA_ASTC_10x6_Format, bb as RGBA_ASTC_10x8_Format, bc as RGBA_ASTC_10x10_Format, bd as RGBA_ASTC_12x10_Format, be as RGBA_ASTC_12x12_Format, bf as SRGB8_ALPHA8_ASTC_4x4_Format, bg as SRGB8_ALPHA8_ASTC_5x4_Format, bh as SRGB8_ALPHA8_ASTC_5x5_Format, bi as SRGB8_ALPHA8_ASTC_6x5_Format, bj as SRGB8_ALPHA8_ASTC_6x6_Format, bk as SRGB8_ALPHA8_ASTC_8x5_Format, bl as SRGB8_ALPHA8_ASTC_8x6_Format, bm as SRGB8_ALPHA8_ASTC_8x8_Format, bn as SRGB8_ALPHA8_ASTC_10x5_Format, bo as SRGB8_ALPHA8_ASTC_10x6_Format, bp as SRGB8_ALPHA8_ASTC_10x8_Format, bq as SRGB8_ALPHA8_ASTC_10x10_Format, br as SRGB8_ALPHA8_ASTC_12x10_Format, bs as SRGB8_ALPHA8_ASTC_12x12_Format, bt as RGBA_BPTC_Format } from '../../../common/constants-2d5769b7.js';
+import { g as NearestFilter, z as CubeUVReflectionMapping, B as BackSide, F as FrontSide, E as CubeReflectionMapping, R as RGBFormat, u as RGBAFormat, G as NoBlending, e as LinearMipmapLinearFilter, L as LinearFilter, H as EquirectangularReflectionMapping, J as EquirectangularRefractionMapping, P as CubeRefractionMapping, C as ClampToEdgeWrapping, Q as NoToneMapping, V as GLSL3, X as CustomToneMapping, y as ACESFilmicToneMapping, Y as CineonToneMapping, _ as ReinhardToneMapping, $ as LinearToneMapping, a0 as PCFShadowMap, a1 as PCFSoftShadowMap, a2 as VSMShadowMap, a3 as CubeUVRefractionMapping, a4 as AddOperation, a5 as MixOperation, x as MultiplyOperation, a6 as LogLuvEncoding, a7 as GammaEncoding, a8 as RGBDEncoding, a9 as RGBM16Encoding, aa as RGBM7Encoding, ab as RGBEEncoding, s as sRGBEncoding, w as LinearEncoding, ac as ObjectSpaceNormalMap, d as TangentSpaceNormalMap, D as DoubleSide, ad as BasicDepthPacking, ae as RGBADepthPacking, r as LessEqualDepth, q as AddEquation, af as SubtractEquation, ag as ReverseSubtractEquation, ah as MinEquation, ai as MaxEquation, aj as ZeroFactor, ak as OneFactor, al as SrcColorFactor, p as SrcAlphaFactor, am as SrcAlphaSaturateFactor, an as DstColorFactor, ao as DstAlphaFactor, ap as OneMinusSrcColorFactor, O as OneMinusSrcAlphaFactor, aq as OneMinusDstColorFactor, ar as OneMinusDstAlphaFactor, as as CustomBlending, at as MultiplyBlending, au as SubtractiveBlending, av as AdditiveBlending, o as NormalBlending, aw as CullFaceNone, ax as CullFaceBack, ay as CullFaceFront, az as NotEqualDepth, aA as GreaterDepth, aB as GreaterEqualDepth, aC as EqualDepth, aD as LessDepth, aE as AlwaysDepth, aF as NeverDepth, f as RepeatWrapping, k as MirroredRepeatWrapping, h as NearestMipmapNearestFilter, j as NearestMipmapLinearFilter, i as LinearMipmapNearestFilter, aG as FloatType, aH as UnsignedIntType, aI as UnsignedInt248Type, aJ as DepthFormat, aK as UnsignedShortType, aL as DepthStencilFormat, aM as HalfFloatType, v as UnsignedByteType, aN as UnsignedShort4444Type, aO as UnsignedShort5551Type, aP as UnsignedShort565Type, aQ as ByteType, aR as ShortType, aS as IntType, aT as AlphaFormat, aU as LuminanceFormat, aV as LuminanceAlphaFormat, aW as RedFormat, aX as RedIntegerFormat, aY as RGFormat, aZ as RGIntegerFormat, a_ as RGBIntegerFormat, a$ as RGBAIntegerFormat, b0 as RGB_S3TC_DXT1_Format, b1 as RGBA_S3TC_DXT1_Format, b2 as RGBA_S3TC_DXT3_Format, b3 as RGBA_S3TC_DXT5_Format, b4 as RGB_PVRTC_4BPPV1_Format, b5 as RGB_PVRTC_2BPPV1_Format, b6 as RGBA_PVRTC_4BPPV1_Format, b7 as RGBA_PVRTC_2BPPV1_Format, b8 as RGB_ETC1_Format, b9 as RGB_ETC2_Format, ba as RGBA_ETC2_EAC_Format, bb as RGBA_ASTC_4x4_Format, bc as RGBA_ASTC_5x4_Format, bd as RGBA_ASTC_5x5_Format, be as RGBA_ASTC_6x5_Format, bf as RGBA_ASTC_6x6_Format, bg as RGBA_ASTC_8x5_Format, bh as RGBA_ASTC_8x6_Format, bi as RGBA_ASTC_8x8_Format, bj as RGBA_ASTC_10x5_Format, bk as RGBA_ASTC_10x6_Format, bl as RGBA_ASTC_10x8_Format, bm as RGBA_ASTC_10x10_Format, bn as RGBA_ASTC_12x10_Format, bo as RGBA_ASTC_12x12_Format, bp as SRGB8_ALPHA8_ASTC_4x4_Format, bq as SRGB8_ALPHA8_ASTC_5x4_Format, br as SRGB8_ALPHA8_ASTC_5x5_Format, bs as SRGB8_ALPHA8_ASTC_6x5_Format, bt as SRGB8_ALPHA8_ASTC_6x6_Format, bu as SRGB8_ALPHA8_ASTC_8x5_Format, bv as SRGB8_ALPHA8_ASTC_8x6_Format, bw as SRGB8_ALPHA8_ASTC_8x8_Format, bx as SRGB8_ALPHA8_ASTC_10x5_Format, by as SRGB8_ALPHA8_ASTC_10x6_Format, bz as SRGB8_ALPHA8_ASTC_10x8_Format, bA as SRGB8_ALPHA8_ASTC_10x10_Format, bB as SRGB8_ALPHA8_ASTC_12x10_Format, bC as SRGB8_ALPHA8_ASTC_12x12_Format, bD as RGBA_BPTC_Format } from '../../../common/constants-4ff93c6e.js';
 import { M as MathUtils } from '../../../common/MathUtils-943fb228.js';
 import { V as Vector3 } from '../../../common/Vector3-df4ff999.js';
 import { V as Vector2 } from '../../../common/Vector2-323a1dbe.js';
-import '../../../common/Box3-205ac6d5.js';
-import { S as Sphere, B as BufferGeometry, a as arrayMax, U as Uint32BufferAttribute, b as Uint16BufferAttribute, c as BufferAttribute } from '../../../common/BufferGeometry-a26ddb44.js';
-import { P as Plane, M as Mesh } from '../../../common/Mesh-25cbe38f.js';
 import { O as Object3D, M as Matrix4 } from '../../../common/Object3D-2bcaf382.js';
 import { M as Matrix3 } from '../../../common/Matrix3-f848f439.js';
-import { C as Color } from '../../../common/Color-6fe630de.js';
-import { M as Material } from '../../../common/Material-05ed5341.js';
+import '../../../common/Box3-205ac6d5.js';
 import { V as Vector4 } from '../../../common/Vector4-50f8032c.js';
+import { C as Color } from '../../../common/Color-6fe630de.js';
+import { a as BufferGeometry, b as arrayMax, U as Uint32BufferAttribute, c as Uint16BufferAttribute, B as BufferAttribute } from '../../../common/BufferGeometry-1ddfff5d.js';
+import { T as Texture } from '../../../common/Texture-074d7c97.js';
+import { P as Plane } from '../../../common/Ray-cab0c6cd.js';
+import { F as Frustum, G as Group } from '../../../common/Group-2aa96080.js';
 import '../../../common/Camera-11ffe826.js';
-import { P as PlaneBufferGeometry } from '../../../common/PlaneBufferGeometry-4bdea935.js';
-import { T as Texture, W as WebGLRenderTarget } from '../../../common/WebGLRenderTarget-b4f6286c.js';
-import { m as mergeUniforms, S as ShaderMaterial, c as cloneUniforms, U as UniformsUtils } from '../../../common/ShaderMaterial-e2b49877.js';
+import { M as Material } from '../../../common/Material-7a4fa39f.js';
+import { M as Mesh } from '../../../common/Mesh-51cd25f0.js';
+import { P as PlaneBufferGeometry } from '../../../common/PlaneBufferGeometry-d6af7539.js';
+import { W as WebGLRenderTarget } from '../../../common/WebGLRenderTarget-24ea59a7.js';
+import { m as mergeUniforms, S as ShaderMaterial, c as cloneUniforms, U as UniformsUtils } from '../../../common/ShaderMaterial-f3ac37de.js';
 import { P as PerspectiveCamera } from '../../../common/PerspectiveCamera-292336e9.js';
-import { B as BoxBufferGeometry } from '../../../common/BoxBufferGeometry-81c5424f.js';
+import { B as BoxBufferGeometry } from '../../../common/BoxBufferGeometry-96ce2544.js';
 
 function DataTexture( data, width, height, format, type, mapping, wrapS, wrapT, magFilter, minFilter, anisotropy, encoding ) {
 
@@ -39,171 +42,6 @@ DataTexture.prototype = Object.create( Texture.prototype );
 DataTexture.prototype.constructor = DataTexture;
 
 DataTexture.prototype.isDataTexture = true;
-
-const _sphere = /*@__PURE__*/ new Sphere();
-const _vector = /*@__PURE__*/ new Vector3();
-
-class Frustum {
-
-	constructor( p0, p1, p2, p3, p4, p5 ) {
-
-		this.planes = [
-
-			( p0 !== undefined ) ? p0 : new Plane(),
-			( p1 !== undefined ) ? p1 : new Plane(),
-			( p2 !== undefined ) ? p2 : new Plane(),
-			( p3 !== undefined ) ? p3 : new Plane(),
-			( p4 !== undefined ) ? p4 : new Plane(),
-			( p5 !== undefined ) ? p5 : new Plane()
-
-		];
-
-	}
-
-	set( p0, p1, p2, p3, p4, p5 ) {
-
-		const planes = this.planes;
-
-		planes[ 0 ].copy( p0 );
-		planes[ 1 ].copy( p1 );
-		planes[ 2 ].copy( p2 );
-		planes[ 3 ].copy( p3 );
-		planes[ 4 ].copy( p4 );
-		planes[ 5 ].copy( p5 );
-
-		return this;
-
-	}
-
-	clone() {
-
-		return new this.constructor().copy( this );
-
-	}
-
-	copy( frustum ) {
-
-		const planes = this.planes;
-
-		for ( let i = 0; i < 6; i ++ ) {
-
-			planes[ i ].copy( frustum.planes[ i ] );
-
-		}
-
-		return this;
-
-	}
-
-	setFromProjectionMatrix( m ) {
-
-		const planes = this.planes;
-		const me = m.elements;
-		const me0 = me[ 0 ], me1 = me[ 1 ], me2 = me[ 2 ], me3 = me[ 3 ];
-		const me4 = me[ 4 ], me5 = me[ 5 ], me6 = me[ 6 ], me7 = me[ 7 ];
-		const me8 = me[ 8 ], me9 = me[ 9 ], me10 = me[ 10 ], me11 = me[ 11 ];
-		const me12 = me[ 12 ], me13 = me[ 13 ], me14 = me[ 14 ], me15 = me[ 15 ];
-
-		planes[ 0 ].setComponents( me3 - me0, me7 - me4, me11 - me8, me15 - me12 ).normalize();
-		planes[ 1 ].setComponents( me3 + me0, me7 + me4, me11 + me8, me15 + me12 ).normalize();
-		planes[ 2 ].setComponents( me3 + me1, me7 + me5, me11 + me9, me15 + me13 ).normalize();
-		planes[ 3 ].setComponents( me3 - me1, me7 - me5, me11 - me9, me15 - me13 ).normalize();
-		planes[ 4 ].setComponents( me3 - me2, me7 - me6, me11 - me10, me15 - me14 ).normalize();
-		planes[ 5 ].setComponents( me3 + me2, me7 + me6, me11 + me10, me15 + me14 ).normalize();
-
-		return this;
-
-	}
-
-	intersectsObject( object ) {
-
-		const geometry = object.geometry;
-
-		if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
-
-		_sphere.copy( geometry.boundingSphere ).applyMatrix4( object.matrixWorld );
-
-		return this.intersectsSphere( _sphere );
-
-	}
-
-	intersectsSprite( sprite ) {
-
-		_sphere.center.set( 0, 0, 0 );
-		_sphere.radius = 0.7071067811865476;
-		_sphere.applyMatrix4( sprite.matrixWorld );
-
-		return this.intersectsSphere( _sphere );
-
-	}
-
-	intersectsSphere( sphere ) {
-
-		const planes = this.planes;
-		const center = sphere.center;
-		const negRadius = - sphere.radius;
-
-		for ( let i = 0; i < 6; i ++ ) {
-
-			const distance = planes[ i ].distanceToPoint( center );
-
-			if ( distance < negRadius ) {
-
-				return false;
-
-			}
-
-		}
-
-		return true;
-
-	}
-
-	intersectsBox( box ) {
-
-		const planes = this.planes;
-
-		for ( let i = 0; i < 6; i ++ ) {
-
-			const plane = planes[ i ];
-
-			// corner at max distance
-
-			_vector.x = plane.normal.x > 0 ? box.max.x : box.min.x;
-			_vector.y = plane.normal.y > 0 ? box.max.y : box.min.y;
-			_vector.z = plane.normal.z > 0 ? box.max.z : box.min.z;
-
-			if ( plane.distanceToPoint( _vector ) < 0 ) {
-
-				return false;
-
-			}
-
-		}
-
-		return true;
-
-	}
-
-	containsPoint( point ) {
-
-		const planes = this.planes;
-
-		for ( let i = 0; i < 6; i ++ ) {
-
-			if ( planes[ i ].distanceToPoint( point ) < 0 ) {
-
-				return false;
-
-			}
-
-		}
-
-		return true;
-
-	}
-
-}
 
 function WebGLAnimation() {
 
@@ -14441,22 +14279,6 @@ ArrayCamera.prototype = Object.assign( Object.create( PerspectiveCamera.prototyp
 	constructor: ArrayCamera,
 
 	isArrayCamera: true
-
-} );
-
-function Group() {
-
-	Object3D.call( this );
-
-	this.type = 'Group';
-
-}
-
-Group.prototype = Object.assign( Object.create( Object3D.prototype ), {
-
-	constructor: Group,
-
-	isGroup: true
 
 } );
 

@@ -1,3 +1,3621 @@
+import '../../../../common/EventDispatcher-a257053d.js';
+import { A as AdditiveAnimationBlendMode$1, Z as ZeroCurvatureEnding$1, W as WrapAroundEnding$1, a as ZeroSlopeEnding$1, I as InterpolateLinear$1, b as InterpolateSmooth$1, c as InterpolateDiscrete$1, N as NormalAnimationBlendMode$1, S as StaticDrawUsage$1, d as TangentSpaceNormalMap$1, R as RGBFormat$1, L as LinearFilter$1, e as LinearMipmapLinearFilter$1, f as RepeatWrapping$1, D as DoubleSide$1, s as sRGBEncoding$1, g as NearestFilter$1, h as NearestMipmapNearestFilter$1, i as LinearMipmapNearestFilter$1, j as NearestMipmapLinearFilter$1, C as ClampToEdgeWrapping$1, k as MirroredRepeatWrapping$1, F as FrontSide$1, l as TriangleFanDrawMode, m as TriangleStripDrawMode } from '../../../../common/constants-4ff93c6e.js';
+import { M as MathUtils$1 } from '../../../../common/MathUtils-943fb228.js';
+import { Q as Quaternion$1, V as Vector3$1 } from '../../../../common/Vector3-df4ff999.js';
+import { V as Vector2$1 } from '../../../../common/Vector2-323a1dbe.js';
+import { O as Object3D$1, M as Matrix4$1 } from '../../../../common/Object3D-2bcaf382.js';
+import '../../../../common/Matrix3-f848f439.js';
+import { B as Box3$1 } from '../../../../common/Box3-205ac6d5.js';
+import { V as Vector4$1 } from '../../../../common/Vector4-50f8032c.js';
+import { C as Color$1 } from '../../../../common/Color-6fe630de.js';
+import { B as BufferAttribute$1, S as Sphere$1, F as Float32BufferAttribute$1, a as BufferGeometry$1 } from '../../../../common/BufferGeometry-1ddfff5d.js';
+import { T as Texture$1 } from '../../../../common/Texture-074d7c97.js';
+import { L as Light$1 } from '../../../../common/Light-44efac91.js';
+import { R as Ray$1 } from '../../../../common/Ray-cab0c6cd.js';
+import { F as Frustum$1, G as Group$1 } from '../../../../common/Group-2aa96080.js';
+import '../../../../common/Camera-11ffe826.js';
+import { O as OrthographicCamera$1 } from '../../../../common/OrthographicCamera-e71e1ad0.js';
+import { M as Material$1 } from '../../../../common/Material-7a4fa39f.js';
+
+const AnimationUtils = {
+
+	// same as Array.prototype.slice, but also works on typed arrays
+	arraySlice: function ( array, from, to ) {
+
+		if ( AnimationUtils.isTypedArray( array ) ) {
+
+			// in ios9 array.subarray(from, undefined) will return empty array
+			// but array.subarray(from) or array.subarray(from, len) is correct
+			return new array.constructor( array.subarray( from, to !== undefined ? to : array.length ) );
+
+		}
+
+		return array.slice( from, to );
+
+	},
+
+	// converts an array to a specific type
+	convertArray: function ( array, type, forceClone ) {
+
+		if ( ! array || // let 'undefined' and 'null' pass
+			! forceClone && array.constructor === type ) return array;
+
+		if ( typeof type.BYTES_PER_ELEMENT === 'number' ) {
+
+			return new type( array ); // create typed array
+
+		}
+
+		return Array.prototype.slice.call( array ); // create Array
+
+	},
+
+	isTypedArray: function ( object ) {
+
+		return ArrayBuffer.isView( object ) &&
+			! ( object instanceof DataView );
+
+	},
+
+	// returns an array by which times and values can be sorted
+	getKeyframeOrder: function ( times ) {
+
+		function compareTime( i, j ) {
+
+			return times[ i ] - times[ j ];
+
+		}
+
+		const n = times.length;
+		const result = new Array( n );
+		for ( let i = 0; i !== n; ++ i ) result[ i ] = i;
+
+		result.sort( compareTime );
+
+		return result;
+
+	},
+
+	// uses the array previously returned by 'getKeyframeOrder' to sort data
+	sortedArray: function ( values, stride, order ) {
+
+		const nValues = values.length;
+		const result = new values.constructor( nValues );
+
+		for ( let i = 0, dstOffset = 0; dstOffset !== nValues; ++ i ) {
+
+			const srcOffset = order[ i ] * stride;
+
+			for ( let j = 0; j !== stride; ++ j ) {
+
+				result[ dstOffset ++ ] = values[ srcOffset + j ];
+
+			}
+
+		}
+
+		return result;
+
+	},
+
+	// function for parsing AOS keyframe formats
+	flattenJSON: function ( jsonKeys, times, values, valuePropertyName ) {
+
+		let i = 1, key = jsonKeys[ 0 ];
+
+		while ( key !== undefined && key[ valuePropertyName ] === undefined ) {
+
+			key = jsonKeys[ i ++ ];
+
+		}
+
+		if ( key === undefined ) return; // no data
+
+		let value = key[ valuePropertyName ];
+		if ( value === undefined ) return; // no data
+
+		if ( Array.isArray( value ) ) {
+
+			do {
+
+				value = key[ valuePropertyName ];
+
+				if ( value !== undefined ) {
+
+					times.push( key.time );
+					values.push.apply( values, value ); // push all elements
+
+				}
+
+				key = jsonKeys[ i ++ ];
+
+			} while ( key !== undefined );
+
+		} else if ( value.toArray !== undefined ) {
+
+			// ...assume THREE.Math-ish
+
+			do {
+
+				value = key[ valuePropertyName ];
+
+				if ( value !== undefined ) {
+
+					times.push( key.time );
+					value.toArray( values, values.length );
+
+				}
+
+				key = jsonKeys[ i ++ ];
+
+			} while ( key !== undefined );
+
+		} else {
+
+			// otherwise push as-is
+
+			do {
+
+				value = key[ valuePropertyName ];
+
+				if ( value !== undefined ) {
+
+					times.push( key.time );
+					values.push( value );
+
+				}
+
+				key = jsonKeys[ i ++ ];
+
+			} while ( key !== undefined );
+
+		}
+
+	},
+
+	subclip: function ( sourceClip, name, startFrame, endFrame, fps ) {
+
+		fps = fps || 30;
+
+		const clip = sourceClip.clone();
+
+		clip.name = name;
+
+		const tracks = [];
+
+		for ( let i = 0; i < clip.tracks.length; ++ i ) {
+
+			const track = clip.tracks[ i ];
+			const valueSize = track.getValueSize();
+
+			const times = [];
+			const values = [];
+
+			for ( let j = 0; j < track.times.length; ++ j ) {
+
+				const frame = track.times[ j ] * fps;
+
+				if ( frame < startFrame || frame >= endFrame ) continue;
+
+				times.push( track.times[ j ] );
+
+				for ( let k = 0; k < valueSize; ++ k ) {
+
+					values.push( track.values[ j * valueSize + k ] );
+
+				}
+
+			}
+
+			if ( times.length === 0 ) continue;
+
+			track.times = AnimationUtils.convertArray( times, track.times.constructor );
+			track.values = AnimationUtils.convertArray( values, track.values.constructor );
+
+			tracks.push( track );
+
+		}
+
+		clip.tracks = tracks;
+
+		// find minimum .times value across all tracks in the trimmed clip
+
+		let minStartTime = Infinity;
+
+		for ( let i = 0; i < clip.tracks.length; ++ i ) {
+
+			if ( minStartTime > clip.tracks[ i ].times[ 0 ] ) {
+
+				minStartTime = clip.tracks[ i ].times[ 0 ];
+
+			}
+
+		}
+
+		// shift all tracks such that clip begins at t=0
+
+		for ( let i = 0; i < clip.tracks.length; ++ i ) {
+
+			clip.tracks[ i ].shift( - 1 * minStartTime );
+
+		}
+
+		clip.resetDuration();
+
+		return clip;
+
+	},
+
+	makeClipAdditive: function ( targetClip, referenceFrame, referenceClip, fps ) {
+
+		if ( referenceFrame === undefined ) referenceFrame = 0;
+		if ( referenceClip === undefined ) referenceClip = targetClip;
+		if ( fps === undefined || fps <= 0 ) fps = 30;
+
+		const numTracks = referenceClip.tracks.length;
+		const referenceTime = referenceFrame / fps;
+
+		// Make each track's values relative to the values at the reference frame
+		for ( let i = 0; i < numTracks; ++ i ) {
+
+			const referenceTrack = referenceClip.tracks[ i ];
+			const referenceTrackType = referenceTrack.ValueTypeName;
+
+			// Skip this track if it's non-numeric
+			if ( referenceTrackType === 'bool' || referenceTrackType === 'string' ) continue;
+
+			// Find the track in the target clip whose name and type matches the reference track
+			const targetTrack = targetClip.tracks.find( function ( track ) {
+
+				return track.name === referenceTrack.name
+					&& track.ValueTypeName === referenceTrackType;
+
+			} );
+
+			if ( targetTrack === undefined ) continue;
+
+			let referenceOffset = 0;
+			const referenceValueSize = referenceTrack.getValueSize();
+
+			if ( referenceTrack.createInterpolant.isInterpolantFactoryMethodGLTFCubicSpline ) {
+
+				referenceOffset = referenceValueSize / 3;
+
+			}
+
+			let targetOffset = 0;
+			const targetValueSize = targetTrack.getValueSize();
+
+			if ( targetTrack.createInterpolant.isInterpolantFactoryMethodGLTFCubicSpline ) {
+
+				targetOffset = targetValueSize / 3;
+
+			}
+
+			const lastIndex = referenceTrack.times.length - 1;
+			let referenceValue;
+
+			// Find the value to subtract out of the track
+			if ( referenceTime <= referenceTrack.times[ 0 ] ) {
+
+				// Reference frame is earlier than the first keyframe, so just use the first keyframe
+				const startIndex = referenceOffset;
+				const endIndex = referenceValueSize - referenceOffset;
+				referenceValue = AnimationUtils.arraySlice( referenceTrack.values, startIndex, endIndex );
+
+			} else if ( referenceTime >= referenceTrack.times[ lastIndex ] ) {
+
+				// Reference frame is after the last keyframe, so just use the last keyframe
+				const startIndex = lastIndex * referenceValueSize + referenceOffset;
+				const endIndex = startIndex + referenceValueSize - referenceOffset;
+				referenceValue = AnimationUtils.arraySlice( referenceTrack.values, startIndex, endIndex );
+
+			} else {
+
+				// Interpolate to the reference value
+				const interpolant = referenceTrack.createInterpolant();
+				const startIndex = referenceOffset;
+				const endIndex = referenceValueSize - referenceOffset;
+				interpolant.evaluate( referenceTime );
+				referenceValue = AnimationUtils.arraySlice( interpolant.resultBuffer, startIndex, endIndex );
+
+			}
+
+			// Conjugate the quaternion
+			if ( referenceTrackType === 'quaternion' ) {
+
+				const referenceQuat = new Quaternion$1().fromArray( referenceValue ).normalize().conjugate();
+				referenceQuat.toArray( referenceValue );
+
+			}
+
+			// Subtract the reference value from all of the track values
+
+			const numTimes = targetTrack.times.length;
+			for ( let j = 0; j < numTimes; ++ j ) {
+
+				const valueStart = j * targetValueSize + targetOffset;
+
+				if ( referenceTrackType === 'quaternion' ) {
+
+					// Multiply the conjugate for quaternion track types
+					Quaternion$1.multiplyQuaternionsFlat(
+						targetTrack.values,
+						valueStart,
+						referenceValue,
+						0,
+						targetTrack.values,
+						valueStart
+					);
+
+				} else {
+
+					const valueEnd = targetValueSize - targetOffset * 2;
+
+					// Subtract each value for all other numeric track types
+					for ( let k = 0; k < valueEnd; ++ k ) {
+
+						targetTrack.values[ valueStart + k ] -= referenceValue[ k ];
+
+					}
+
+				}
+
+			}
+
+		}
+
+		targetClip.blendMode = AdditiveAnimationBlendMode$1;
+
+		return targetClip;
+
+	}
+
+};
+
+/**
+ * Abstract base class of interpolants over parametric samples.
+ *
+ * The parameter domain is one dimensional, typically the time or a path
+ * along a curve defined by the data.
+ *
+ * The sample values can have any dimensionality and derived classes may
+ * apply special interpretations to the data.
+ *
+ * This class provides the interval seek in a Template Method, deferring
+ * the actual interpolation to derived classes.
+ *
+ * Time complexity is O(1) for linear access crossing at most two points
+ * and O(log N) for random access, where N is the number of positions.
+ *
+ * References:
+ *
+ * 		http://www.oodesign.com/template-method-pattern.html
+ *
+ */
+
+function Interpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+
+	this.parameterPositions = parameterPositions;
+	this._cachedIndex = 0;
+
+	this.resultBuffer = resultBuffer !== undefined ?
+		resultBuffer : new sampleValues.constructor( sampleSize );
+	this.sampleValues = sampleValues;
+	this.valueSize = sampleSize;
+
+}
+
+Object.assign( Interpolant.prototype, {
+
+	evaluate: function ( t ) {
+
+		const pp = this.parameterPositions;
+		let i1 = this._cachedIndex,
+			t1 = pp[ i1 ],
+			t0 = pp[ i1 - 1 ];
+
+		validate_interval: {
+
+			seek: {
+
+				let right;
+
+				linear_scan: {
+
+					//- See http://jsperf.com/comparison-to-undefined/3
+					//- slower code:
+					//-
+					//- 				if ( t >= t1 || t1 === undefined ) {
+					forward_scan: if ( ! ( t < t1 ) ) {
+
+						for ( let giveUpAt = i1 + 2; ; ) {
+
+							if ( t1 === undefined ) {
+
+								if ( t < t0 ) break forward_scan;
+
+								// after end
+
+								i1 = pp.length;
+								this._cachedIndex = i1;
+								return this.afterEnd_( i1 - 1, t, t0 );
+
+							}
+
+							if ( i1 === giveUpAt ) break; // this loop
+
+							t0 = t1;
+							t1 = pp[ ++ i1 ];
+
+							if ( t < t1 ) {
+
+								// we have arrived at the sought interval
+								break seek;
+
+							}
+
+						}
+
+						// prepare binary search on the right side of the index
+						right = pp.length;
+						break linear_scan;
+
+					}
+
+					//- slower code:
+					//-					if ( t < t0 || t0 === undefined ) {
+					if ( ! ( t >= t0 ) ) {
+
+						// looping?
+
+						const t1global = pp[ 1 ];
+
+						if ( t < t1global ) {
+
+							i1 = 2; // + 1, using the scan for the details
+							t0 = t1global;
+
+						}
+
+						// linear reverse scan
+
+						for ( let giveUpAt = i1 - 2; ; ) {
+
+							if ( t0 === undefined ) {
+
+								// before start
+
+								this._cachedIndex = 0;
+								return this.beforeStart_( 0, t, t1 );
+
+							}
+
+							if ( i1 === giveUpAt ) break; // this loop
+
+							t1 = t0;
+							t0 = pp[ -- i1 - 1 ];
+
+							if ( t >= t0 ) {
+
+								// we have arrived at the sought interval
+								break seek;
+
+							}
+
+						}
+
+						// prepare binary search on the left side of the index
+						right = i1;
+						i1 = 0;
+						break linear_scan;
+
+					}
+
+					// the interval is valid
+
+					break validate_interval;
+
+				} // linear scan
+
+				// binary search
+
+				while ( i1 < right ) {
+
+					const mid = ( i1 + right ) >>> 1;
+
+					if ( t < pp[ mid ] ) {
+
+						right = mid;
+
+					} else {
+
+						i1 = mid + 1;
+
+					}
+
+				}
+
+				t1 = pp[ i1 ];
+				t0 = pp[ i1 - 1 ];
+
+				// check boundary cases, again
+
+				if ( t0 === undefined ) {
+
+					this._cachedIndex = 0;
+					return this.beforeStart_( 0, t, t1 );
+
+				}
+
+				if ( t1 === undefined ) {
+
+					i1 = pp.length;
+					this._cachedIndex = i1;
+					return this.afterEnd_( i1 - 1, t0, t );
+
+				}
+
+			} // seek
+
+			this._cachedIndex = i1;
+
+			this.intervalChanged_( i1, t0, t1 );
+
+		} // validate_interval
+
+		return this.interpolate_( i1, t0, t, t1 );
+
+	},
+
+	settings: null, // optional, subclass-specific settings structure
+	// Note: The indirection allows central control of many interpolants.
+
+	// --- Protected interface
+
+	DefaultSettings_: {},
+
+	getSettings_: function () {
+
+		return this.settings || this.DefaultSettings_;
+
+	},
+
+	copySampleValue_: function ( index ) {
+
+		// copies a sample value to the result buffer
+
+		const result = this.resultBuffer,
+			values = this.sampleValues,
+			stride = this.valueSize,
+			offset = index * stride;
+
+		for ( let i = 0; i !== stride; ++ i ) {
+
+			result[ i ] = values[ offset + i ];
+
+		}
+
+		return result;
+
+	},
+
+	// Template methods for derived classes:
+
+	interpolate_: function ( /* i1, t0, t, t1 */ ) {
+
+		throw new Error( 'call to abstract method' );
+		// implementations shall return this.resultBuffer
+
+	},
+
+	intervalChanged_: function ( /* i1, t0, t1 */ ) {
+
+		// empty
+
+	}
+
+} );
+
+// DECLARE ALIAS AFTER assign prototype
+Object.assign( Interpolant.prototype, {
+
+	//( 0, t, t0 ), returns this.resultBuffer
+	beforeStart_: Interpolant.prototype.copySampleValue_,
+
+	//( N-1, tN-1, t ), returns this.resultBuffer
+	afterEnd_: Interpolant.prototype.copySampleValue_,
+
+} );
+
+/**
+ * Fast and simple cubic spline interpolant.
+ *
+ * It was derived from a Hermitian construction setting the first derivative
+ * at each sample position to the linear slope between neighboring positions
+ * over their parameter interval.
+ */
+
+function CubicInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+
+	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+
+	this._weightPrev = - 0;
+	this._offsetPrev = - 0;
+	this._weightNext = - 0;
+	this._offsetNext = - 0;
+
+}
+
+CubicInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+
+	constructor: CubicInterpolant,
+
+	DefaultSettings_: {
+
+		endingStart: ZeroCurvatureEnding$1,
+		endingEnd: ZeroCurvatureEnding$1
+
+	},
+
+	intervalChanged_: function ( i1, t0, t1 ) {
+
+		const pp = this.parameterPositions;
+		let iPrev = i1 - 2,
+			iNext = i1 + 1,
+
+			tPrev = pp[ iPrev ],
+			tNext = pp[ iNext ];
+
+		if ( tPrev === undefined ) {
+
+			switch ( this.getSettings_().endingStart ) {
+
+				case ZeroSlopeEnding$1:
+
+					// f'(t0) = 0
+					iPrev = i1;
+					tPrev = 2 * t0 - t1;
+
+					break;
+
+				case WrapAroundEnding$1:
+
+					// use the other end of the curve
+					iPrev = pp.length - 2;
+					tPrev = t0 + pp[ iPrev ] - pp[ iPrev + 1 ];
+
+					break;
+
+				default: // ZeroCurvatureEnding
+
+					// f''(t0) = 0 a.k.a. Natural Spline
+					iPrev = i1;
+					tPrev = t1;
+
+			}
+
+		}
+
+		if ( tNext === undefined ) {
+
+			switch ( this.getSettings_().endingEnd ) {
+
+				case ZeroSlopeEnding$1:
+
+					// f'(tN) = 0
+					iNext = i1;
+					tNext = 2 * t1 - t0;
+
+					break;
+
+				case WrapAroundEnding$1:
+
+					// use the other end of the curve
+					iNext = 1;
+					tNext = t1 + pp[ 1 ] - pp[ 0 ];
+
+					break;
+
+				default: // ZeroCurvatureEnding
+
+					// f''(tN) = 0, a.k.a. Natural Spline
+					iNext = i1 - 1;
+					tNext = t0;
+
+			}
+
+		}
+
+		const halfDt = ( t1 - t0 ) * 0.5,
+			stride = this.valueSize;
+
+		this._weightPrev = halfDt / ( t0 - tPrev );
+		this._weightNext = halfDt / ( tNext - t1 );
+		this._offsetPrev = iPrev * stride;
+		this._offsetNext = iNext * stride;
+
+	},
+
+	interpolate_: function ( i1, t0, t, t1 ) {
+
+		const result = this.resultBuffer,
+			values = this.sampleValues,
+			stride = this.valueSize,
+
+			o1 = i1 * stride,		o0 = o1 - stride,
+			oP = this._offsetPrev, 	oN = this._offsetNext,
+			wP = this._weightPrev,	wN = this._weightNext,
+
+			p = ( t - t0 ) / ( t1 - t0 ),
+			pp = p * p,
+			ppp = pp * p;
+
+		// evaluate polynomials
+
+		const sP = - wP * ppp + 2 * wP * pp - wP * p;
+		const s0 = ( 1 + wP ) * ppp + ( - 1.5 - 2 * wP ) * pp + ( - 0.5 + wP ) * p + 1;
+		const s1 = ( - 1 - wN ) * ppp + ( 1.5 + wN ) * pp + 0.5 * p;
+		const sN = wN * ppp - wN * pp;
+
+		// combine data linearly
+
+		for ( let i = 0; i !== stride; ++ i ) {
+
+			result[ i ] =
+					sP * values[ oP + i ] +
+					s0 * values[ o0 + i ] +
+					s1 * values[ o1 + i ] +
+					sN * values[ oN + i ];
+
+		}
+
+		return result;
+
+	}
+
+} );
+
+function LinearInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+
+	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+
+}
+
+LinearInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+
+	constructor: LinearInterpolant,
+
+	interpolate_: function ( i1, t0, t, t1 ) {
+
+		const result = this.resultBuffer,
+			values = this.sampleValues,
+			stride = this.valueSize,
+
+			offset1 = i1 * stride,
+			offset0 = offset1 - stride,
+
+			weight1 = ( t - t0 ) / ( t1 - t0 ),
+			weight0 = 1 - weight1;
+
+		for ( let i = 0; i !== stride; ++ i ) {
+
+			result[ i ] =
+					values[ offset0 + i ] * weight0 +
+					values[ offset1 + i ] * weight1;
+
+		}
+
+		return result;
+
+	}
+
+} );
+
+/**
+ *
+ * Interpolant that evaluates to the sample value at the position preceeding
+ * the parameter.
+ */
+
+function DiscreteInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+
+	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+
+}
+
+DiscreteInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+
+	constructor: DiscreteInterpolant,
+
+	interpolate_: function ( i1 /*, t0, t, t1 */ ) {
+
+		return this.copySampleValue_( i1 - 1 );
+
+	}
+
+} );
+
+function KeyframeTrack( name, times, values, interpolation ) {
+
+	if ( name === undefined ) throw new Error( 'THREE.KeyframeTrack: track name is undefined' );
+	if ( times === undefined || times.length === 0 ) throw new Error( 'THREE.KeyframeTrack: no keyframes in track named ' + name );
+
+	this.name = name;
+
+	this.times = AnimationUtils.convertArray( times, this.TimeBufferType );
+	this.values = AnimationUtils.convertArray( values, this.ValueBufferType );
+
+	this.setInterpolation( interpolation || this.DefaultInterpolation );
+
+}
+
+// Static methods
+
+Object.assign( KeyframeTrack, {
+
+	// Serialization (in static context, because of constructor invocation
+	// and automatic invocation of .toJSON):
+
+	toJSON: function ( track ) {
+
+		const trackType = track.constructor;
+
+		let json;
+
+		// derived classes can define a static toJSON method
+		if ( trackType.toJSON !== undefined ) {
+
+			json = trackType.toJSON( track );
+
+		} else {
+
+			// by default, we assume the data can be serialized as-is
+			json = {
+
+				'name': track.name,
+				'times': AnimationUtils.convertArray( track.times, Array ),
+				'values': AnimationUtils.convertArray( track.values, Array )
+
+			};
+
+			const interpolation = track.getInterpolation();
+
+			if ( interpolation !== track.DefaultInterpolation ) {
+
+				json.interpolation = interpolation;
+
+			}
+
+		}
+
+		json.type = track.ValueTypeName; // mandatory
+
+		return json;
+
+	}
+
+} );
+
+Object.assign( KeyframeTrack.prototype, {
+
+	constructor: KeyframeTrack,
+
+	TimeBufferType: Float32Array,
+
+	ValueBufferType: Float32Array,
+
+	DefaultInterpolation: InterpolateLinear$1,
+
+	InterpolantFactoryMethodDiscrete: function ( result ) {
+
+		return new DiscreteInterpolant( this.times, this.values, this.getValueSize(), result );
+
+	},
+
+	InterpolantFactoryMethodLinear: function ( result ) {
+
+		return new LinearInterpolant( this.times, this.values, this.getValueSize(), result );
+
+	},
+
+	InterpolantFactoryMethodSmooth: function ( result ) {
+
+		return new CubicInterpolant( this.times, this.values, this.getValueSize(), result );
+
+	},
+
+	setInterpolation: function ( interpolation ) {
+
+		let factoryMethod;
+
+		switch ( interpolation ) {
+
+			case InterpolateDiscrete$1:
+
+				factoryMethod = this.InterpolantFactoryMethodDiscrete;
+
+				break;
+
+			case InterpolateLinear$1:
+
+				factoryMethod = this.InterpolantFactoryMethodLinear;
+
+				break;
+
+			case InterpolateSmooth$1:
+
+				factoryMethod = this.InterpolantFactoryMethodSmooth;
+
+				break;
+
+		}
+
+		if ( factoryMethod === undefined ) {
+
+			const message = "unsupported interpolation for " +
+				this.ValueTypeName + " keyframe track named " + this.name;
+
+			if ( this.createInterpolant === undefined ) {
+
+				// fall back to default, unless the default itself is messed up
+				if ( interpolation !== this.DefaultInterpolation ) {
+
+					this.setInterpolation( this.DefaultInterpolation );
+
+				} else {
+
+					throw new Error( message ); // fatal, in this case
+
+				}
+
+			}
+
+			console.warn( 'THREE.KeyframeTrack:', message );
+			return this;
+
+		}
+
+		this.createInterpolant = factoryMethod;
+
+		return this;
+
+	},
+
+	getInterpolation: function () {
+
+		switch ( this.createInterpolant ) {
+
+			case this.InterpolantFactoryMethodDiscrete:
+
+				return InterpolateDiscrete$1;
+
+			case this.InterpolantFactoryMethodLinear:
+
+				return InterpolateLinear$1;
+
+			case this.InterpolantFactoryMethodSmooth:
+
+				return InterpolateSmooth$1;
+
+		}
+
+	},
+
+	getValueSize: function () {
+
+		return this.values.length / this.times.length;
+
+	},
+
+	// move all keyframes either forwards or backwards in time
+	shift: function ( timeOffset ) {
+
+		if ( timeOffset !== 0.0 ) {
+
+			const times = this.times;
+
+			for ( let i = 0, n = times.length; i !== n; ++ i ) {
+
+				times[ i ] += timeOffset;
+
+			}
+
+		}
+
+		return this;
+
+	},
+
+	// scale all keyframe times by a factor (useful for frame <-> seconds conversions)
+	scale: function ( timeScale ) {
+
+		if ( timeScale !== 1.0 ) {
+
+			const times = this.times;
+
+			for ( let i = 0, n = times.length; i !== n; ++ i ) {
+
+				times[ i ] *= timeScale;
+
+			}
+
+		}
+
+		return this;
+
+	},
+
+	// removes keyframes before and after animation without changing any values within the range [startTime, endTime].
+	// IMPORTANT: We do not shift around keys to the start of the track time, because for interpolated keys this will change their values
+	trim: function ( startTime, endTime ) {
+
+		const times = this.times,
+			nKeys = times.length;
+
+		let from = 0,
+			to = nKeys - 1;
+
+		while ( from !== nKeys && times[ from ] < startTime ) {
+
+			++ from;
+
+		}
+
+		while ( to !== - 1 && times[ to ] > endTime ) {
+
+			-- to;
+
+		}
+
+		++ to; // inclusive -> exclusive bound
+
+		if ( from !== 0 || to !== nKeys ) {
+
+			// empty tracks are forbidden, so keep at least one keyframe
+			if ( from >= to ) {
+
+				to = Math.max( to, 1 );
+				from = to - 1;
+
+			}
+
+			const stride = this.getValueSize();
+			this.times = AnimationUtils.arraySlice( times, from, to );
+			this.values = AnimationUtils.arraySlice( this.values, from * stride, to * stride );
+
+		}
+
+		return this;
+
+	},
+
+	// ensure we do not get a GarbageInGarbageOut situation, make sure tracks are at least minimally viable
+	validate: function () {
+
+		let valid = true;
+
+		const valueSize = this.getValueSize();
+		if ( valueSize - Math.floor( valueSize ) !== 0 ) {
+
+			console.error( 'THREE.KeyframeTrack: Invalid value size in track.', this );
+			valid = false;
+
+		}
+
+		const times = this.times,
+			values = this.values,
+
+			nKeys = times.length;
+
+		if ( nKeys === 0 ) {
+
+			console.error( 'THREE.KeyframeTrack: Track is empty.', this );
+			valid = false;
+
+		}
+
+		let prevTime = null;
+
+		for ( let i = 0; i !== nKeys; i ++ ) {
+
+			const currTime = times[ i ];
+
+			if ( typeof currTime === 'number' && isNaN( currTime ) ) {
+
+				console.error( 'THREE.KeyframeTrack: Time is not a valid number.', this, i, currTime );
+				valid = false;
+				break;
+
+			}
+
+			if ( prevTime !== null && prevTime > currTime ) {
+
+				console.error( 'THREE.KeyframeTrack: Out of order keys.', this, i, currTime, prevTime );
+				valid = false;
+				break;
+
+			}
+
+			prevTime = currTime;
+
+		}
+
+		if ( values !== undefined ) {
+
+			if ( AnimationUtils.isTypedArray( values ) ) {
+
+				for ( let i = 0, n = values.length; i !== n; ++ i ) {
+
+					const value = values[ i ];
+
+					if ( isNaN( value ) ) {
+
+						console.error( 'THREE.KeyframeTrack: Value is not a valid number.', this, i, value );
+						valid = false;
+						break;
+
+					}
+
+				}
+
+			}
+
+		}
+
+		return valid;
+
+	},
+
+	// removes equivalent sequential keys as common in morph target sequences
+	// (0,0,0,0,1,1,1,0,0,0,0,0,0,0) --> (0,0,1,1,0,0)
+	optimize: function () {
+
+		// times or values may be shared with other tracks, so overwriting is unsafe
+		const times = AnimationUtils.arraySlice( this.times ),
+			values = AnimationUtils.arraySlice( this.values ),
+			stride = this.getValueSize(),
+
+			smoothInterpolation = this.getInterpolation() === InterpolateSmooth$1,
+
+			lastIndex = times.length - 1;
+
+		let writeIndex = 1;
+
+		for ( let i = 1; i < lastIndex; ++ i ) {
+
+			let keep = false;
+
+			const time = times[ i ];
+			const timeNext = times[ i + 1 ];
+
+			// remove adjacent keyframes scheduled at the same time
+
+			if ( time !== timeNext && ( i !== 1 || time !== time[ 0 ] ) ) {
+
+				if ( ! smoothInterpolation ) {
+
+					// remove unnecessary keyframes same as their neighbors
+
+					const offset = i * stride,
+						offsetP = offset - stride,
+						offsetN = offset + stride;
+
+					for ( let j = 0; j !== stride; ++ j ) {
+
+						const value = values[ offset + j ];
+
+						if ( value !== values[ offsetP + j ] ||
+							value !== values[ offsetN + j ] ) {
+
+							keep = true;
+							break;
+
+						}
+
+					}
+
+				} else {
+
+					keep = true;
+
+				}
+
+			}
+
+			// in-place compaction
+
+			if ( keep ) {
+
+				if ( i !== writeIndex ) {
+
+					times[ writeIndex ] = times[ i ];
+
+					const readOffset = i * stride,
+						writeOffset = writeIndex * stride;
+
+					for ( let j = 0; j !== stride; ++ j ) {
+
+						values[ writeOffset + j ] = values[ readOffset + j ];
+
+					}
+
+				}
+
+				++ writeIndex;
+
+			}
+
+		}
+
+		// flush last keyframe (compaction looks ahead)
+
+		if ( lastIndex > 0 ) {
+
+			times[ writeIndex ] = times[ lastIndex ];
+
+			for ( let readOffset = lastIndex * stride, writeOffset = writeIndex * stride, j = 0; j !== stride; ++ j ) {
+
+				values[ writeOffset + j ] = values[ readOffset + j ];
+
+			}
+
+			++ writeIndex;
+
+		}
+
+		if ( writeIndex !== times.length ) {
+
+			this.times = AnimationUtils.arraySlice( times, 0, writeIndex );
+			this.values = AnimationUtils.arraySlice( values, 0, writeIndex * stride );
+
+		} else {
+
+			this.times = times;
+			this.values = values;
+
+		}
+
+		return this;
+
+	},
+
+	clone: function () {
+
+		const times = AnimationUtils.arraySlice( this.times, 0 );
+		const values = AnimationUtils.arraySlice( this.values, 0 );
+
+		const TypedKeyframeTrack = this.constructor;
+		const track = new TypedKeyframeTrack( this.name, times, values );
+
+		// Interpolant argument to constructor is not saved, so copy the factory method directly.
+		track.createInterpolant = this.createInterpolant;
+
+		return track;
+
+	}
+
+} );
+
+/**
+ * A Track of Boolean keyframe values.
+ */
+
+function BooleanKeyframeTrack( name, times, values ) {
+
+	KeyframeTrack.call( this, name, times, values );
+
+}
+
+BooleanKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+
+	constructor: BooleanKeyframeTrack,
+
+	ValueTypeName: 'bool',
+	ValueBufferType: Array,
+
+	DefaultInterpolation: InterpolateDiscrete$1,
+
+	InterpolantFactoryMethodLinear: undefined,
+	InterpolantFactoryMethodSmooth: undefined
+
+	// Note: Actually this track could have a optimized / compressed
+	// representation of a single value and a custom interpolant that
+	// computes "firstValue ^ isOdd( index )".
+
+} );
+
+/**
+ * A Track of keyframe values that represent color.
+ */
+
+function ColorKeyframeTrack( name, times, values, interpolation ) {
+
+	KeyframeTrack.call( this, name, times, values, interpolation );
+
+}
+
+ColorKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+
+	constructor: ColorKeyframeTrack,
+
+	ValueTypeName: 'color'
+
+	// ValueBufferType is inherited
+
+	// DefaultInterpolation is inherited
+
+	// Note: Very basic implementation and nothing special yet.
+	// However, this is the place for color space parameterization.
+
+} );
+
+/**
+ * A Track of numeric keyframe values.
+ */
+
+function NumberKeyframeTrack( name, times, values, interpolation ) {
+
+	KeyframeTrack.call( this, name, times, values, interpolation );
+
+}
+
+NumberKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+
+	constructor: NumberKeyframeTrack,
+
+	ValueTypeName: 'number'
+
+	// ValueBufferType is inherited
+
+	// DefaultInterpolation is inherited
+
+} );
+
+/**
+ * Spherical linear unit quaternion interpolant.
+ */
+
+function QuaternionLinearInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+
+	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+
+}
+
+QuaternionLinearInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+
+	constructor: QuaternionLinearInterpolant,
+
+	interpolate_: function ( i1, t0, t, t1 ) {
+
+		const result = this.resultBuffer,
+			values = this.sampleValues,
+			stride = this.valueSize,
+
+			alpha = ( t - t0 ) / ( t1 - t0 );
+
+		let offset = i1 * stride;
+
+		for ( let end = offset + stride; offset !== end; offset += 4 ) {
+
+			Quaternion$1.slerpFlat( result, 0, values, offset - stride, values, offset, alpha );
+
+		}
+
+		return result;
+
+	}
+
+} );
+
+/**
+ * A Track of quaternion keyframe values.
+ */
+
+function QuaternionKeyframeTrack( name, times, values, interpolation ) {
+
+	KeyframeTrack.call( this, name, times, values, interpolation );
+
+}
+
+QuaternionKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+
+	constructor: QuaternionKeyframeTrack,
+
+	ValueTypeName: 'quaternion',
+
+	// ValueBufferType is inherited
+
+	DefaultInterpolation: InterpolateLinear$1,
+
+	InterpolantFactoryMethodLinear: function ( result ) {
+
+		return new QuaternionLinearInterpolant( this.times, this.values, this.getValueSize(), result );
+
+	},
+
+	InterpolantFactoryMethodSmooth: undefined // not yet implemented
+
+} );
+
+/**
+ * A Track that interpolates Strings
+ */
+
+function StringKeyframeTrack( name, times, values, interpolation ) {
+
+	KeyframeTrack.call( this, name, times, values, interpolation );
+
+}
+
+StringKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+
+	constructor: StringKeyframeTrack,
+
+	ValueTypeName: 'string',
+	ValueBufferType: Array,
+
+	DefaultInterpolation: InterpolateDiscrete$1,
+
+	InterpolantFactoryMethodLinear: undefined,
+
+	InterpolantFactoryMethodSmooth: undefined
+
+} );
+
+/**
+ * A Track of vectored keyframe values.
+ */
+
+function VectorKeyframeTrack( name, times, values, interpolation ) {
+
+	KeyframeTrack.call( this, name, times, values, interpolation );
+
+}
+
+VectorKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+
+	constructor: VectorKeyframeTrack,
+
+	ValueTypeName: 'vector'
+
+	// ValueBufferType is inherited
+
+	// DefaultInterpolation is inherited
+
+} );
+
+function AnimationClip( name, duration, tracks, blendMode ) {
+
+	this.name = name;
+	this.tracks = tracks;
+	this.duration = ( duration !== undefined ) ? duration : - 1;
+	this.blendMode = ( blendMode !== undefined ) ? blendMode : NormalAnimationBlendMode$1;
+
+	this.uuid = MathUtils$1.generateUUID();
+
+	// this means it should figure out its duration by scanning the tracks
+	if ( this.duration < 0 ) {
+
+		this.resetDuration();
+
+	}
+
+}
+
+function getTrackTypeForValueTypeName( typeName ) {
+
+	switch ( typeName.toLowerCase() ) {
+
+		case 'scalar':
+		case 'double':
+		case 'float':
+		case 'number':
+		case 'integer':
+
+			return NumberKeyframeTrack;
+
+		case 'vector':
+		case 'vector2':
+		case 'vector3':
+		case 'vector4':
+
+			return VectorKeyframeTrack;
+
+		case 'color':
+
+			return ColorKeyframeTrack;
+
+		case 'quaternion':
+
+			return QuaternionKeyframeTrack;
+
+		case 'bool':
+		case 'boolean':
+
+			return BooleanKeyframeTrack;
+
+		case 'string':
+
+			return StringKeyframeTrack;
+
+	}
+
+	throw new Error( 'THREE.KeyframeTrack: Unsupported typeName: ' + typeName );
+
+}
+
+function parseKeyframeTrack( json ) {
+
+	if ( json.type === undefined ) {
+
+		throw new Error( 'THREE.KeyframeTrack: track type undefined, can not parse' );
+
+	}
+
+	const trackType = getTrackTypeForValueTypeName( json.type );
+
+	if ( json.times === undefined ) {
+
+		const times = [], values = [];
+
+		AnimationUtils.flattenJSON( json.keys, times, values, 'value' );
+
+		json.times = times;
+		json.values = values;
+
+	}
+
+	// derived classes can define a static parse method
+	if ( trackType.parse !== undefined ) {
+
+		return trackType.parse( json );
+
+	} else {
+
+		// by default, we assume a constructor compatible with the base
+		return new trackType( json.name, json.times, json.values, json.interpolation );
+
+	}
+
+}
+
+Object.assign( AnimationClip, {
+
+	parse: function ( json ) {
+
+		const tracks = [],
+			jsonTracks = json.tracks,
+			frameTime = 1.0 / ( json.fps || 1.0 );
+
+		for ( let i = 0, n = jsonTracks.length; i !== n; ++ i ) {
+
+			tracks.push( parseKeyframeTrack( jsonTracks[ i ] ).scale( frameTime ) );
+
+		}
+
+		return new AnimationClip( json.name, json.duration, tracks, json.blendMode );
+
+	},
+
+	toJSON: function ( clip ) {
+
+		const tracks = [],
+			clipTracks = clip.tracks;
+
+		const json = {
+
+			'name': clip.name,
+			'duration': clip.duration,
+			'tracks': tracks,
+			'uuid': clip.uuid,
+			'blendMode': clip.blendMode
+
+		};
+
+		for ( let i = 0, n = clipTracks.length; i !== n; ++ i ) {
+
+			tracks.push( KeyframeTrack.toJSON( clipTracks[ i ] ) );
+
+		}
+
+		return json;
+
+	},
+
+	CreateFromMorphTargetSequence: function ( name, morphTargetSequence, fps, noLoop ) {
+
+		const numMorphTargets = morphTargetSequence.length;
+		const tracks = [];
+
+		for ( let i = 0; i < numMorphTargets; i ++ ) {
+
+			let times = [];
+			let values = [];
+
+			times.push(
+				( i + numMorphTargets - 1 ) % numMorphTargets,
+				i,
+				( i + 1 ) % numMorphTargets );
+
+			values.push( 0, 1, 0 );
+
+			const order = AnimationUtils.getKeyframeOrder( times );
+			times = AnimationUtils.sortedArray( times, 1, order );
+			values = AnimationUtils.sortedArray( values, 1, order );
+
+			// if there is a key at the first frame, duplicate it as the
+			// last frame as well for perfect loop.
+			if ( ! noLoop && times[ 0 ] === 0 ) {
+
+				times.push( numMorphTargets );
+				values.push( values[ 0 ] );
+
+			}
+
+			tracks.push(
+				new NumberKeyframeTrack(
+					'.morphTargetInfluences[' + morphTargetSequence[ i ].name + ']',
+					times, values
+				).scale( 1.0 / fps ) );
+
+		}
+
+		return new AnimationClip( name, - 1, tracks );
+
+	},
+
+	findByName: function ( objectOrClipArray, name ) {
+
+		let clipArray = objectOrClipArray;
+
+		if ( ! Array.isArray( objectOrClipArray ) ) {
+
+			const o = objectOrClipArray;
+			clipArray = o.geometry && o.geometry.animations || o.animations;
+
+		}
+
+		for ( let i = 0; i < clipArray.length; i ++ ) {
+
+			if ( clipArray[ i ].name === name ) {
+
+				return clipArray[ i ];
+
+			}
+
+		}
+
+		return null;
+
+	},
+
+	CreateClipsFromMorphTargetSequences: function ( morphTargets, fps, noLoop ) {
+
+		const animationToMorphTargets = {};
+
+		// tested with https://regex101.com/ on trick sequences
+		// such flamingo_flyA_003, flamingo_run1_003, crdeath0059
+		const pattern = /^([\w-]*?)([\d]+)$/;
+
+		// sort morph target names into animation groups based
+		// patterns like Walk_001, Walk_002, Run_001, Run_002
+		for ( let i = 0, il = morphTargets.length; i < il; i ++ ) {
+
+			const morphTarget = morphTargets[ i ];
+			const parts = morphTarget.name.match( pattern );
+
+			if ( parts && parts.length > 1 ) {
+
+				const name = parts[ 1 ];
+
+				let animationMorphTargets = animationToMorphTargets[ name ];
+
+				if ( ! animationMorphTargets ) {
+
+					animationToMorphTargets[ name ] = animationMorphTargets = [];
+
+				}
+
+				animationMorphTargets.push( morphTarget );
+
+			}
+
+		}
+
+		const clips = [];
+
+		for ( const name in animationToMorphTargets ) {
+
+			clips.push( AnimationClip.CreateFromMorphTargetSequence( name, animationToMorphTargets[ name ], fps, noLoop ) );
+
+		}
+
+		return clips;
+
+	},
+
+	// parse the animation.hierarchy format
+	parseAnimation: function ( animation, bones ) {
+
+		if ( ! animation ) {
+
+			console.error( 'THREE.AnimationClip: No animation in JSONLoader data.' );
+			return null;
+
+		}
+
+		const addNonemptyTrack = function ( trackType, trackName, animationKeys, propertyName, destTracks ) {
+
+			// only return track if there are actually keys.
+			if ( animationKeys.length !== 0 ) {
+
+				const times = [];
+				const values = [];
+
+				AnimationUtils.flattenJSON( animationKeys, times, values, propertyName );
+
+				// empty keys are filtered out, so check again
+				if ( times.length !== 0 ) {
+
+					destTracks.push( new trackType( trackName, times, values ) );
+
+				}
+
+			}
+
+		};
+
+		const tracks = [];
+
+		const clipName = animation.name || 'default';
+		const fps = animation.fps || 30;
+		const blendMode = animation.blendMode;
+
+		// automatic length determination in AnimationClip.
+		let duration = animation.length || - 1;
+
+		const hierarchyTracks = animation.hierarchy || [];
+
+		for ( let h = 0; h < hierarchyTracks.length; h ++ ) {
+
+			const animationKeys = hierarchyTracks[ h ].keys;
+
+			// skip empty tracks
+			if ( ! animationKeys || animationKeys.length === 0 ) continue;
+
+			// process morph targets
+			if ( animationKeys[ 0 ].morphTargets ) {
+
+				// figure out all morph targets used in this track
+				const morphTargetNames = {};
+
+				let k;
+
+				for ( k = 0; k < animationKeys.length; k ++ ) {
+
+					if ( animationKeys[ k ].morphTargets ) {
+
+						for ( let m = 0; m < animationKeys[ k ].morphTargets.length; m ++ ) {
+
+							morphTargetNames[ animationKeys[ k ].morphTargets[ m ] ] = - 1;
+
+						}
+
+					}
+
+				}
+
+				// create a track for each morph target with all zero
+				// morphTargetInfluences except for the keys in which
+				// the morphTarget is named.
+				for ( const morphTargetName in morphTargetNames ) {
+
+					const times = [];
+					const values = [];
+
+					for ( let m = 0; m !== animationKeys[ k ].morphTargets.length; ++ m ) {
+
+						const animationKey = animationKeys[ k ];
+
+						times.push( animationKey.time );
+						values.push( ( animationKey.morphTarget === morphTargetName ) ? 1 : 0 );
+
+					}
+
+					tracks.push( new NumberKeyframeTrack( '.morphTargetInfluence[' + morphTargetName + ']', times, values ) );
+
+				}
+
+				duration = morphTargetNames.length * ( fps || 1.0 );
+
+			} else {
+
+				// ...assume skeletal animation
+
+				const boneName = '.bones[' + bones[ h ].name + ']';
+
+				addNonemptyTrack(
+					VectorKeyframeTrack, boneName + '.position',
+					animationKeys, 'pos', tracks );
+
+				addNonemptyTrack(
+					QuaternionKeyframeTrack, boneName + '.quaternion',
+					animationKeys, 'rot', tracks );
+
+				addNonemptyTrack(
+					VectorKeyframeTrack, boneName + '.scale',
+					animationKeys, 'scl', tracks );
+
+			}
+
+		}
+
+		if ( tracks.length === 0 ) {
+
+			return null;
+
+		}
+
+		const clip = new AnimationClip( clipName, duration, tracks, blendMode );
+
+		return clip;
+
+	}
+
+} );
+
+Object.assign( AnimationClip.prototype, {
+
+	resetDuration: function () {
+
+		const tracks = this.tracks;
+		let duration = 0;
+
+		for ( let i = 0, n = tracks.length; i !== n; ++ i ) {
+
+			const track = this.tracks[ i ];
+
+			duration = Math.max( duration, track.times[ track.times.length - 1 ] );
+
+		}
+
+		this.duration = duration;
+
+		return this;
+
+	},
+
+	trim: function () {
+
+		for ( let i = 0; i < this.tracks.length; i ++ ) {
+
+			this.tracks[ i ].trim( 0, this.duration );
+
+		}
+
+		return this;
+
+	},
+
+	validate: function () {
+
+		let valid = true;
+
+		for ( let i = 0; i < this.tracks.length; i ++ ) {
+
+			valid = valid && this.tracks[ i ].validate();
+
+		}
+
+		return valid;
+
+	},
+
+	optimize: function () {
+
+		for ( let i = 0; i < this.tracks.length; i ++ ) {
+
+			this.tracks[ i ].optimize();
+
+		}
+
+		return this;
+
+	},
+
+	clone: function () {
+
+		const tracks = [];
+
+		for ( let i = 0; i < this.tracks.length; i ++ ) {
+
+			tracks.push( this.tracks[ i ].clone() );
+
+		}
+
+		return new AnimationClip( this.name, this.duration, tracks, this.blendMode );
+
+	}
+
+} );
+
+function Bone() {
+
+	Object3D$1.call( this );
+
+	this.type = 'Bone';
+
+}
+
+Bone.prototype = Object.assign( Object.create( Object3D$1.prototype ), {
+
+	constructor: Bone,
+
+	isBone: true
+
+} );
+
+function CanvasTexture( canvas, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy ) {
+
+	Texture$1.call( this, canvas, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy );
+
+	this.needsUpdate = true;
+
+}
+
+CanvasTexture.prototype = Object.create( Texture$1.prototype );
+CanvasTexture.prototype.constructor = CanvasTexture;
+CanvasTexture.prototype.isCanvasTexture = true;
+
+function LightShadow( camera ) {
+
+	this.camera = camera;
+
+	this.bias = 0;
+	this.normalBias = 0;
+	this.radius = 1;
+
+	this.mapSize = new Vector2$1( 512, 512 );
+
+	this.map = null;
+	this.mapPass = null;
+	this.matrix = new Matrix4$1();
+
+	this.autoUpdate = true;
+	this.needsUpdate = false;
+
+	this._frustum = new Frustum$1();
+	this._frameExtents = new Vector2$1( 1, 1 );
+
+	this._viewportCount = 1;
+
+	this._viewports = [
+
+		new Vector4$1( 0, 0, 1, 1 )
+
+	];
+
+}
+
+Object.assign( LightShadow.prototype, {
+
+	_projScreenMatrix: new Matrix4$1(),
+
+	_lightPositionWorld: new Vector3$1(),
+
+	_lookTarget: new Vector3$1(),
+
+	getViewportCount: function () {
+
+		return this._viewportCount;
+
+	},
+
+	getFrustum: function () {
+
+		return this._frustum;
+
+	},
+
+	updateMatrices: function ( light ) {
+
+		const shadowCamera = this.camera,
+			shadowMatrix = this.matrix,
+			projScreenMatrix = this._projScreenMatrix,
+			lookTarget = this._lookTarget,
+			lightPositionWorld = this._lightPositionWorld;
+
+		lightPositionWorld.setFromMatrixPosition( light.matrixWorld );
+		shadowCamera.position.copy( lightPositionWorld );
+
+		lookTarget.setFromMatrixPosition( light.target.matrixWorld );
+		shadowCamera.lookAt( lookTarget );
+		shadowCamera.updateMatrixWorld();
+
+		projScreenMatrix.multiplyMatrices( shadowCamera.projectionMatrix, shadowCamera.matrixWorldInverse );
+		this._frustum.setFromProjectionMatrix( projScreenMatrix );
+
+		shadowMatrix.set(
+			0.5, 0.0, 0.0, 0.5,
+			0.0, 0.5, 0.0, 0.5,
+			0.0, 0.0, 0.5, 0.5,
+			0.0, 0.0, 0.0, 1.0
+		);
+
+		shadowMatrix.multiply( shadowCamera.projectionMatrix );
+		shadowMatrix.multiply( shadowCamera.matrixWorldInverse );
+
+	},
+
+	getViewport: function ( viewportIndex ) {
+
+		return this._viewports[ viewportIndex ];
+
+	},
+
+	getFrameExtents: function () {
+
+		return this._frameExtents;
+
+	},
+
+	copy: function ( source ) {
+
+		this.camera = source.camera.clone();
+
+		this.bias = source.bias;
+		this.radius = source.radius;
+
+		this.mapSize.copy( source.mapSize );
+
+		return this;
+
+	},
+
+	clone: function () {
+
+		return new this.constructor().copy( this );
+
+	},
+
+	toJSON: function () {
+
+		const object = {};
+
+		if ( this.bias !== 0 ) object.bias = this.bias;
+		if ( this.normalBias !== 0 ) object.normalBias = this.normalBias;
+		if ( this.radius !== 1 ) object.radius = this.radius;
+		if ( this.mapSize.x !== 512 || this.mapSize.y !== 512 ) object.mapSize = this.mapSize.toArray();
+
+		object.camera = this.camera.toJSON( false ).object;
+		delete object.camera.matrix;
+
+		return object;
+
+	}
+
+} );
+
+function DirectionalLightShadow() {
+
+	LightShadow.call( this, new OrthographicCamera$1( - 5, 5, 5, - 5, 0.5, 500 ) );
+
+}
+
+DirectionalLightShadow.prototype = Object.assign( Object.create( LightShadow.prototype ), {
+
+	constructor: DirectionalLightShadow,
+
+	isDirectionalLightShadow: true,
+
+	updateMatrices: function ( light ) {
+
+		LightShadow.prototype.updateMatrices.call( this, light );
+
+	}
+
+} );
+
+function DirectionalLight( color, intensity ) {
+
+	Light$1.call( this, color, intensity );
+
+	this.type = 'DirectionalLight';
+
+	this.position.copy( Object3D$1.DefaultUp );
+	this.updateMatrix();
+
+	this.target = new Object3D$1();
+
+	this.shadow = new DirectionalLightShadow();
+
+}
+
+DirectionalLight.prototype = Object.assign( Object.create( Light$1.prototype ), {
+
+	constructor: DirectionalLight,
+
+	isDirectionalLight: true,
+
+	copy: function ( source ) {
+
+		Light$1.prototype.copy.call( this, source );
+
+		this.target = source.target.clone();
+
+		this.shadow = source.shadow.clone();
+
+		return this;
+
+	}
+
+} );
+
+const Cache = {
+
+	enabled: false,
+
+	files: {},
+
+	add: function ( key, file ) {
+
+		if ( this.enabled === false ) return;
+
+		// console.log( 'THREE.Cache', 'Adding key:', key );
+
+		this.files[ key ] = file;
+
+	},
+
+	get: function ( key ) {
+
+		if ( this.enabled === false ) return;
+
+		// console.log( 'THREE.Cache', 'Checking key:', key );
+
+		return this.files[ key ];
+
+	},
+
+	remove: function ( key ) {
+
+		delete this.files[ key ];
+
+	},
+
+	clear: function () {
+
+		this.files = {};
+
+	}
+
+};
+
+function LoadingManager( onLoad, onProgress, onError ) {
+
+	const scope = this;
+
+	let isLoading = false;
+	let itemsLoaded = 0;
+	let itemsTotal = 0;
+	let urlModifier = undefined;
+	const handlers = [];
+
+	// Refer to #5689 for the reason why we don't set .onStart
+	// in the constructor
+
+	this.onStart = undefined;
+	this.onLoad = onLoad;
+	this.onProgress = onProgress;
+	this.onError = onError;
+
+	this.itemStart = function ( url ) {
+
+		itemsTotal ++;
+
+		if ( isLoading === false ) {
+
+			if ( scope.onStart !== undefined ) {
+
+				scope.onStart( url, itemsLoaded, itemsTotal );
+
+			}
+
+		}
+
+		isLoading = true;
+
+	};
+
+	this.itemEnd = function ( url ) {
+
+		itemsLoaded ++;
+
+		if ( scope.onProgress !== undefined ) {
+
+			scope.onProgress( url, itemsLoaded, itemsTotal );
+
+		}
+
+		if ( itemsLoaded === itemsTotal ) {
+
+			isLoading = false;
+
+			if ( scope.onLoad !== undefined ) {
+
+				scope.onLoad();
+
+			}
+
+		}
+
+	};
+
+	this.itemError = function ( url ) {
+
+		if ( scope.onError !== undefined ) {
+
+			scope.onError( url );
+
+		}
+
+	};
+
+	this.resolveURL = function ( url ) {
+
+		if ( urlModifier ) {
+
+			return urlModifier( url );
+
+		}
+
+		return url;
+
+	};
+
+	this.setURLModifier = function ( transform ) {
+
+		urlModifier = transform;
+
+		return this;
+
+	};
+
+	this.addHandler = function ( regex, loader ) {
+
+		handlers.push( regex, loader );
+
+		return this;
+
+	};
+
+	this.removeHandler = function ( regex ) {
+
+		const index = handlers.indexOf( regex );
+
+		if ( index !== - 1 ) {
+
+			handlers.splice( index, 2 );
+
+		}
+
+		return this;
+
+	};
+
+	this.getHandler = function ( file ) {
+
+		for ( let i = 0, l = handlers.length; i < l; i += 2 ) {
+
+			const regex = handlers[ i ];
+			const loader = handlers[ i + 1 ];
+
+			if ( regex.global ) regex.lastIndex = 0; // see #17920
+
+			if ( regex.test( file ) ) {
+
+				return loader;
+
+			}
+
+		}
+
+		return null;
+
+	};
+
+}
+
+const DefaultLoadingManager = new LoadingManager();
+
+function Loader( manager ) {
+
+	this.manager = ( manager !== undefined ) ? manager : DefaultLoadingManager;
+
+	this.crossOrigin = 'anonymous';
+	this.withCredentials = false;
+	this.path = '';
+	this.resourcePath = '';
+	this.requestHeader = {};
+
+}
+
+Object.assign( Loader.prototype, {
+
+	load: function ( /* url, onLoad, onProgress, onError */ ) {},
+
+	loadAsync: function ( url, onProgress ) {
+
+		const scope = this;
+
+		return new Promise( function ( resolve, reject ) {
+
+			scope.load( url, resolve, onProgress, reject );
+
+		} );
+
+	},
+
+	parse: function ( /* data */ ) {},
+
+	setCrossOrigin: function ( crossOrigin ) {
+
+		this.crossOrigin = crossOrigin;
+		return this;
+
+	},
+
+	setWithCredentials: function ( value ) {
+
+		this.withCredentials = value;
+		return this;
+
+	},
+
+	setPath: function ( path ) {
+
+		this.path = path;
+		return this;
+
+	},
+
+	setResourcePath: function ( resourcePath ) {
+
+		this.resourcePath = resourcePath;
+		return this;
+
+	},
+
+	setRequestHeader: function ( requestHeader ) {
+
+		this.requestHeader = requestHeader;
+		return this;
+
+	}
+
+} );
+
+const loading = {};
+
+function FileLoader( manager ) {
+
+	Loader.call( this, manager );
+
+}
+
+FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+
+	constructor: FileLoader,
+
+	load: function ( url, onLoad, onProgress, onError ) {
+
+		if ( url === undefined ) url = '';
+
+		if ( this.path !== undefined ) url = this.path + url;
+
+		url = this.manager.resolveURL( url );
+
+		const scope = this;
+
+		const cached = Cache.get( url );
+
+		if ( cached !== undefined ) {
+
+			scope.manager.itemStart( url );
+
+			setTimeout( function () {
+
+				if ( onLoad ) onLoad( cached );
+
+				scope.manager.itemEnd( url );
+
+			}, 0 );
+
+			return cached;
+
+		}
+
+		// Check if request is duplicate
+
+		if ( loading[ url ] !== undefined ) {
+
+			loading[ url ].push( {
+
+				onLoad: onLoad,
+				onProgress: onProgress,
+				onError: onError
+
+			} );
+
+			return;
+
+		}
+
+		// Check for data: URI
+		const dataUriRegex = /^data:(.*?)(;base64)?,(.*)$/;
+		const dataUriRegexResult = url.match( dataUriRegex );
+		let request;
+
+		// Safari can not handle Data URIs through XMLHttpRequest so process manually
+		if ( dataUriRegexResult ) {
+
+			const mimeType = dataUriRegexResult[ 1 ];
+			const isBase64 = !! dataUriRegexResult[ 2 ];
+
+			let data = dataUriRegexResult[ 3 ];
+			data = decodeURIComponent( data );
+
+			if ( isBase64 ) data = atob( data );
+
+			try {
+
+				let response;
+				const responseType = ( this.responseType || '' ).toLowerCase();
+
+				switch ( responseType ) {
+
+					case 'arraybuffer':
+					case 'blob':
+
+						const view = new Uint8Array( data.length );
+
+						for ( let i = 0; i < data.length; i ++ ) {
+
+							view[ i ] = data.charCodeAt( i );
+
+						}
+
+						if ( responseType === 'blob' ) {
+
+							response = new Blob( [ view.buffer ], { type: mimeType } );
+
+						} else {
+
+							response = view.buffer;
+
+						}
+
+						break;
+
+					case 'document':
+
+						const parser = new DOMParser();
+						response = parser.parseFromString( data, mimeType );
+
+						break;
+
+					case 'json':
+
+						response = JSON.parse( data );
+
+						break;
+
+					default: // 'text' or other
+
+						response = data;
+
+						break;
+
+				}
+
+				// Wait for next browser tick like standard XMLHttpRequest event dispatching does
+				setTimeout( function () {
+
+					if ( onLoad ) onLoad( response );
+
+					scope.manager.itemEnd( url );
+
+				}, 0 );
+
+			} catch ( error ) {
+
+				// Wait for next browser tick like standard XMLHttpRequest event dispatching does
+				setTimeout( function () {
+
+					if ( onError ) onError( error );
+
+					scope.manager.itemError( url );
+					scope.manager.itemEnd( url );
+
+				}, 0 );
+
+			}
+
+		} else {
+
+			// Initialise array for duplicate requests
+
+			loading[ url ] = [];
+
+			loading[ url ].push( {
+
+				onLoad: onLoad,
+				onProgress: onProgress,
+				onError: onError
+
+			} );
+
+			request = new XMLHttpRequest();
+
+			request.open( 'GET', url, true );
+
+			request.addEventListener( 'load', function ( event ) {
+
+				const response = this.response;
+
+				const callbacks = loading[ url ];
+
+				delete loading[ url ];
+
+				if ( this.status === 200 || this.status === 0 ) {
+
+					// Some browsers return HTTP Status 0 when using non-http protocol
+					// e.g. 'file://' or 'data://'. Handle as success.
+
+					if ( this.status === 0 ) console.warn( 'THREE.FileLoader: HTTP Status 0 received.' );
+
+					// Add to cache only on HTTP success, so that we do not cache
+					// error response bodies as proper responses to requests.
+					Cache.add( url, response );
+
+					for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
+
+						const callback = callbacks[ i ];
+						if ( callback.onLoad ) callback.onLoad( response );
+
+					}
+
+					scope.manager.itemEnd( url );
+
+				} else {
+
+					for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
+
+						const callback = callbacks[ i ];
+						if ( callback.onError ) callback.onError( event );
+
+					}
+
+					scope.manager.itemError( url );
+					scope.manager.itemEnd( url );
+
+				}
+
+			}, false );
+
+			request.addEventListener( 'progress', function ( event ) {
+
+				const callbacks = loading[ url ];
+
+				for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
+
+					const callback = callbacks[ i ];
+					if ( callback.onProgress ) callback.onProgress( event );
+
+				}
+
+			}, false );
+
+			request.addEventListener( 'error', function ( event ) {
+
+				const callbacks = loading[ url ];
+
+				delete loading[ url ];
+
+				for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
+
+					const callback = callbacks[ i ];
+					if ( callback.onError ) callback.onError( event );
+
+				}
+
+				scope.manager.itemError( url );
+				scope.manager.itemEnd( url );
+
+			}, false );
+
+			request.addEventListener( 'abort', function ( event ) {
+
+				const callbacks = loading[ url ];
+
+				delete loading[ url ];
+
+				for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
+
+					const callback = callbacks[ i ];
+					if ( callback.onError ) callback.onError( event );
+
+				}
+
+				scope.manager.itemError( url );
+				scope.manager.itemEnd( url );
+
+			}, false );
+
+			if ( this.responseType !== undefined ) request.responseType = this.responseType;
+			if ( this.withCredentials !== undefined ) request.withCredentials = this.withCredentials;
+
+			if ( request.overrideMimeType ) request.overrideMimeType( this.mimeType !== undefined ? this.mimeType : 'text/plain' );
+
+			for ( const header in this.requestHeader ) {
+
+				request.setRequestHeader( header, this.requestHeader[ header ] );
+
+			}
+
+			request.send( null );
+
+		}
+
+		scope.manager.itemStart( url );
+
+		return request;
+
+	},
+
+	setResponseType: function ( value ) {
+
+		this.responseType = value;
+		return this;
+
+	},
+
+	setMimeType: function ( value ) {
+
+		this.mimeType = value;
+		return this;
+
+	}
+
+} );
+
+function ImageBitmapLoader( manager ) {
+
+	if ( typeof createImageBitmap === 'undefined' ) {
+
+		console.warn( 'THREE.ImageBitmapLoader: createImageBitmap() not supported.' );
+
+	}
+
+	if ( typeof fetch === 'undefined' ) {
+
+		console.warn( 'THREE.ImageBitmapLoader: fetch() not supported.' );
+
+	}
+
+	Loader.call( this, manager );
+
+	this.options = { premultiplyAlpha: 'none' };
+
+}
+
+ImageBitmapLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+
+	constructor: ImageBitmapLoader,
+
+	isImageBitmapLoader: true,
+
+	setOptions: function setOptions( options ) {
+
+		this.options = options;
+
+		return this;
+
+	},
+
+	load: function ( url, onLoad, onProgress, onError ) {
+
+		if ( url === undefined ) url = '';
+
+		if ( this.path !== undefined ) url = this.path + url;
+
+		url = this.manager.resolveURL( url );
+
+		const scope = this;
+
+		const cached = Cache.get( url );
+
+		if ( cached !== undefined ) {
+
+			scope.manager.itemStart( url );
+
+			setTimeout( function () {
+
+				if ( onLoad ) onLoad( cached );
+
+				scope.manager.itemEnd( url );
+
+			}, 0 );
+
+			return cached;
+
+		}
+
+		const fetchOptions = {};
+		fetchOptions.credentials = ( this.crossOrigin === 'anonymous' ) ? 'same-origin' : 'include';
+
+		fetch( url, fetchOptions ).then( function ( res ) {
+
+			return res.blob();
+
+		} ).then( function ( blob ) {
+
+			return createImageBitmap( blob, scope.options );
+
+		} ).then( function ( imageBitmap ) {
+
+			Cache.add( url, imageBitmap );
+
+			if ( onLoad ) onLoad( imageBitmap );
+
+			scope.manager.itemEnd( url );
+
+		} ).catch( function ( e ) {
+
+			if ( onError ) onError( e );
+
+			scope.manager.itemError( url );
+			scope.manager.itemEnd( url );
+
+		} );
+
+		scope.manager.itemStart( url );
+
+	}
+
+} );
+
+function InterleavedBuffer( array, stride ) {
+
+	this.array = array;
+	this.stride = stride;
+	this.count = array !== undefined ? array.length / stride : 0;
+
+	this.usage = StaticDrawUsage$1;
+	this.updateRange = { offset: 0, count: - 1 };
+
+	this.version = 0;
+
+	this.uuid = MathUtils$1.generateUUID();
+
+}
+
+Object.defineProperty( InterleavedBuffer.prototype, 'needsUpdate', {
+
+	set: function ( value ) {
+
+		if ( value === true ) this.version ++;
+
+	}
+
+} );
+
+Object.assign( InterleavedBuffer.prototype, {
+
+	isInterleavedBuffer: true,
+
+	onUploadCallback: function () {},
+
+	setUsage: function ( value ) {
+
+		this.usage = value;
+
+		return this;
+
+	},
+
+	copy: function ( source ) {
+
+		this.array = new source.array.constructor( source.array );
+		this.count = source.count;
+		this.stride = source.stride;
+		this.usage = source.usage;
+
+		return this;
+
+	},
+
+	copyAt: function ( index1, attribute, index2 ) {
+
+		index1 *= this.stride;
+		index2 *= attribute.stride;
+
+		for ( let i = 0, l = this.stride; i < l; i ++ ) {
+
+			this.array[ index1 + i ] = attribute.array[ index2 + i ];
+
+		}
+
+		return this;
+
+	},
+
+	set: function ( value, offset ) {
+
+		if ( offset === undefined ) offset = 0;
+
+		this.array.set( value, offset );
+
+		return this;
+
+	},
+
+	clone: function ( data ) {
+
+		if ( data.arrayBuffers === undefined ) {
+
+			data.arrayBuffers = {};
+
+		}
+
+		if ( this.array.buffer._uuid === undefined ) {
+
+			this.array.buffer._uuid = MathUtils$1.generateUUID();
+
+		}
+
+		if ( data.arrayBuffers[ this.array.buffer._uuid ] === undefined ) {
+
+			data.arrayBuffers[ this.array.buffer._uuid ] = this.array.slice( 0 ).buffer;
+
+		}
+
+		const array = new this.array.constructor( data.arrayBuffers[ this.array.buffer._uuid ] );
+
+		const ib = new InterleavedBuffer( array, this.stride );
+		ib.setUsage( this.usage );
+
+		return ib;
+
+	},
+
+	onUpload: function ( callback ) {
+
+		this.onUploadCallback = callback;
+
+		return this;
+
+	},
+
+	toJSON: function ( data ) {
+
+		if ( data.arrayBuffers === undefined ) {
+
+			data.arrayBuffers = {};
+
+		}
+
+		// generate UUID for array buffer if necessary
+
+		if ( this.array.buffer._uuid === undefined ) {
+
+			this.array.buffer._uuid = MathUtils$1.generateUUID();
+
+		}
+
+		if ( data.arrayBuffers[ this.array.buffer._uuid ] === undefined ) {
+
+			data.arrayBuffers[ this.array.buffer._uuid ] = Array.prototype.slice.call( new Uint32Array( this.array.buffer ) );
+
+		}
+
+		//
+
+		return {
+			uuid: this.uuid,
+			buffer: this.array.buffer._uuid,
+			type: this.array.constructor.name,
+			stride: this.stride
+		};
+
+	}
+
+} );
+
+const _vector = new Vector3$1();
+
+function InterleavedBufferAttribute( interleavedBuffer, itemSize, offset, normalized ) {
+
+	this.name = '';
+
+	this.data = interleavedBuffer;
+	this.itemSize = itemSize;
+	this.offset = offset;
+
+	this.normalized = normalized === true;
+
+}
+
+Object.defineProperties( InterleavedBufferAttribute.prototype, {
+
+	count: {
+
+		get: function () {
+
+			return this.data.count;
+
+		}
+
+	},
+
+	array: {
+
+		get: function () {
+
+			return this.data.array;
+
+		}
+
+	},
+
+	needsUpdate: {
+
+		set: function ( value ) {
+
+			this.data.needsUpdate = value;
+
+		}
+
+	}
+
+} );
+
+Object.assign( InterleavedBufferAttribute.prototype, {
+
+	isInterleavedBufferAttribute: true,
+
+	applyMatrix4: function ( m ) {
+
+		for ( let i = 0, l = this.data.count; i < l; i ++ ) {
+
+			_vector.x = this.getX( i );
+			_vector.y = this.getY( i );
+			_vector.z = this.getZ( i );
+
+			_vector.applyMatrix4( m );
+
+			this.setXYZ( i, _vector.x, _vector.y, _vector.z );
+
+		}
+
+		return this;
+
+	},
+
+	setX: function ( index, x ) {
+
+		this.data.array[ index * this.data.stride + this.offset ] = x;
+
+		return this;
+
+	},
+
+	setY: function ( index, y ) {
+
+		this.data.array[ index * this.data.stride + this.offset + 1 ] = y;
+
+		return this;
+
+	},
+
+	setZ: function ( index, z ) {
+
+		this.data.array[ index * this.data.stride + this.offset + 2 ] = z;
+
+		return this;
+
+	},
+
+	setW: function ( index, w ) {
+
+		this.data.array[ index * this.data.stride + this.offset + 3 ] = w;
+
+		return this;
+
+	},
+
+	getX: function ( index ) {
+
+		return this.data.array[ index * this.data.stride + this.offset ];
+
+	},
+
+	getY: function ( index ) {
+
+		return this.data.array[ index * this.data.stride + this.offset + 1 ];
+
+	},
+
+	getZ: function ( index ) {
+
+		return this.data.array[ index * this.data.stride + this.offset + 2 ];
+
+	},
+
+	getW: function ( index ) {
+
+		return this.data.array[ index * this.data.stride + this.offset + 3 ];
+
+	},
+
+	setXY: function ( index, x, y ) {
+
+		index = index * this.data.stride + this.offset;
+
+		this.data.array[ index + 0 ] = x;
+		this.data.array[ index + 1 ] = y;
+
+		return this;
+
+	},
+
+	setXYZ: function ( index, x, y, z ) {
+
+		index = index * this.data.stride + this.offset;
+
+		this.data.array[ index + 0 ] = x;
+		this.data.array[ index + 1 ] = y;
+		this.data.array[ index + 2 ] = z;
+
+		return this;
+
+	},
+
+	setXYZW: function ( index, x, y, z, w ) {
+
+		index = index * this.data.stride + this.offset;
+
+		this.data.array[ index + 0 ] = x;
+		this.data.array[ index + 1 ] = y;
+		this.data.array[ index + 2 ] = z;
+		this.data.array[ index + 3 ] = w;
+
+		return this;
+
+	},
+
+	clone: function ( data ) {
+
+		if ( data === undefined ) {
+
+			console.log( 'THREE.InterleavedBufferAttribute.clone(): Cloning an interlaved buffer attribute will deinterleave buffer data.' );
+
+			const array = [];
+
+			for ( let i = 0; i < this.count; i ++ ) {
+
+				const index = i * this.data.stride + this.offset;
+
+				for ( let j = 0; j < this.itemSize; j ++ ) {
+
+					array.push( this.data.array[ index + j ] );
+
+				}
+
+			}
+
+			return new BufferAttribute$1( new this.array.constructor( array ), this.itemSize, this.normalized );
+
+		} else {
+
+			if ( data.interleavedBuffers === undefined ) {
+
+				data.interleavedBuffers = {};
+
+			}
+
+			if ( data.interleavedBuffers[ this.data.uuid ] === undefined ) {
+
+				data.interleavedBuffers[ this.data.uuid ] = this.data.clone( data );
+
+			}
+
+			return new InterleavedBufferAttribute( data.interleavedBuffers[ this.data.uuid ], this.itemSize, this.offset, this.normalized );
+
+		}
+
+	},
+
+	toJSON: function ( data ) {
+
+		if ( data === undefined ) {
+
+			console.log( 'THREE.InterleavedBufferAttribute.toJSON(): Serializing an interlaved buffer attribute will deinterleave buffer data.' );
+
+			const array = [];
+
+			for ( let i = 0; i < this.count; i ++ ) {
+
+				const index = i * this.data.stride + this.offset;
+
+				for ( let j = 0; j < this.itemSize; j ++ ) {
+
+					array.push( this.data.array[ index + j ] );
+
+				}
+
+			}
+
+			// deinterleave data and save it as an ordinary buffer attribute for now
+
+			return {
+				itemSize: this.itemSize,
+				type: this.array.constructor.name,
+				array: array,
+				normalized: this.normalized
+			};
+
+		} else {
+
+			// save as true interlaved attribtue
+
+			if ( data.interleavedBuffers === undefined ) {
+
+				data.interleavedBuffers = {};
+
+			}
+
+			if ( data.interleavedBuffers[ this.data.uuid ] === undefined ) {
+
+				data.interleavedBuffers[ this.data.uuid ] = this.data.toJSON( data );
+
+			}
+
+			return {
+				isInterleavedBufferAttribute: true,
+				itemSize: this.itemSize,
+				data: this.data.uuid,
+				offset: this.offset,
+				normalized: this.normalized
+			};
+
+		}
+
+	}
+
+} );
+
+/**
+ * parameters = {
+ *  color: <hex>,
+ *  opacity: <float>,
+ *
+ *  linewidth: <float>,
+ *  linecap: "round",
+ *  linejoin: "round"
+ * }
+ */
+
+function LineBasicMaterial( parameters ) {
+
+	Material$1.call( this );
+
+	this.type = 'LineBasicMaterial';
+
+	this.color = new Color$1( 0xffffff );
+
+	this.linewidth = 1;
+	this.linecap = 'round';
+	this.linejoin = 'round';
+
+	this.morphTargets = false;
+
+	this.setValues( parameters );
+
+}
+
+LineBasicMaterial.prototype = Object.create( Material$1.prototype );
+LineBasicMaterial.prototype.constructor = LineBasicMaterial;
+
+LineBasicMaterial.prototype.isLineBasicMaterial = true;
+
+LineBasicMaterial.prototype.copy = function ( source ) {
+
+	Material$1.prototype.copy.call( this, source );
+
+	this.color.copy( source.color );
+
+	this.linewidth = source.linewidth;
+	this.linecap = source.linecap;
+	this.linejoin = source.linejoin;
+
+	this.morphTargets = source.morphTargets;
+
+	return this;
+
+};
+
+const _start = new Vector3$1();
+const _end = new Vector3$1();
+const _inverseMatrix = new Matrix4$1();
+const _ray = new Ray$1();
+const _sphere = new Sphere$1();
+
+function Line( geometry, material, mode ) {
+
+	if ( mode === 1 ) {
+
+		console.error( 'THREE.Line: parameter THREE.LinePieces no longer supported. Use THREE.LineSegments instead.' );
+
+	}
+
+	Object3D$1.call( this );
+
+	this.type = 'Line';
+
+	this.geometry = geometry !== undefined ? geometry : new BufferGeometry$1();
+	this.material = material !== undefined ? material : new LineBasicMaterial();
+
+	this.updateMorphTargets();
+
+}
+
+Line.prototype = Object.assign( Object.create( Object3D$1.prototype ), {
+
+	constructor: Line,
+
+	isLine: true,
+
+	copy: function ( source ) {
+
+		Object3D$1.prototype.copy.call( this, source );
+
+		this.material = source.material;
+		this.geometry = source.geometry;
+
+		return this;
+
+	},
+
+	computeLineDistances: function () {
+
+		const geometry = this.geometry;
+
+		if ( geometry.isBufferGeometry ) {
+
+			// we assume non-indexed geometry
+
+			if ( geometry.index === null ) {
+
+				const positionAttribute = geometry.attributes.position;
+				const lineDistances = [ 0 ];
+
+				for ( let i = 1, l = positionAttribute.count; i < l; i ++ ) {
+
+					_start.fromBufferAttribute( positionAttribute, i - 1 );
+					_end.fromBufferAttribute( positionAttribute, i );
+
+					lineDistances[ i ] = lineDistances[ i - 1 ];
+					lineDistances[ i ] += _start.distanceTo( _end );
+
+				}
+
+				geometry.setAttribute( 'lineDistance', new Float32BufferAttribute$1( lineDistances, 1 ) );
+
+			} else {
+
+				console.warn( 'THREE.Line.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.' );
+
+			}
+
+		} else if ( geometry.isGeometry ) {
+
+			const vertices = geometry.vertices;
+			const lineDistances = geometry.lineDistances;
+
+			lineDistances[ 0 ] = 0;
+
+			for ( let i = 1, l = vertices.length; i < l; i ++ ) {
+
+				lineDistances[ i ] = lineDistances[ i - 1 ];
+				lineDistances[ i ] += vertices[ i - 1 ].distanceTo( vertices[ i ] );
+
+			}
+
+		}
+
+		return this;
+
+	},
+
+	raycast: function ( raycaster, intersects ) {
+
+		const geometry = this.geometry;
+		const matrixWorld = this.matrixWorld;
+		const threshold = raycaster.params.Line.threshold;
+
+		// Checking boundingSphere distance to ray
+
+		if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
+
+		_sphere.copy( geometry.boundingSphere );
+		_sphere.applyMatrix4( matrixWorld );
+		_sphere.radius += threshold;
+
+		if ( raycaster.ray.intersectsSphere( _sphere ) === false ) return;
+
+		//
+
+		_inverseMatrix.getInverse( matrixWorld );
+		_ray.copy( raycaster.ray ).applyMatrix4( _inverseMatrix );
+
+		const localThreshold = threshold / ( ( this.scale.x + this.scale.y + this.scale.z ) / 3 );
+		const localThresholdSq = localThreshold * localThreshold;
+
+		const vStart = new Vector3$1();
+		const vEnd = new Vector3$1();
+		const interSegment = new Vector3$1();
+		const interRay = new Vector3$1();
+		const step = this.isLineSegments ? 2 : 1;
+
+		if ( geometry.isBufferGeometry ) {
+
+			const index = geometry.index;
+			const attributes = geometry.attributes;
+			const positionAttribute = attributes.position;
+
+			if ( index !== null ) {
+
+				const indices = index.array;
+
+				for ( let i = 0, l = indices.length - 1; i < l; i += step ) {
+
+					const a = indices[ i ];
+					const b = indices[ i + 1 ];
+
+					vStart.fromBufferAttribute( positionAttribute, a );
+					vEnd.fromBufferAttribute( positionAttribute, b );
+
+					const distSq = _ray.distanceSqToSegment( vStart, vEnd, interRay, interSegment );
+
+					if ( distSq > localThresholdSq ) continue;
+
+					interRay.applyMatrix4( this.matrixWorld ); //Move back to world space for distance calculation
+
+					const distance = raycaster.ray.origin.distanceTo( interRay );
+
+					if ( distance < raycaster.near || distance > raycaster.far ) continue;
+
+					intersects.push( {
+
+						distance: distance,
+						// What do we want? intersection point on the ray or on the segment??
+						// point: raycaster.ray.at( distance ),
+						point: interSegment.clone().applyMatrix4( this.matrixWorld ),
+						index: i,
+						face: null,
+						faceIndex: null,
+						object: this
+
+					} );
+
+				}
+
+			} else {
+
+				for ( let i = 0, l = positionAttribute.count - 1; i < l; i += step ) {
+
+					vStart.fromBufferAttribute( positionAttribute, i );
+					vEnd.fromBufferAttribute( positionAttribute, i + 1 );
+
+					const distSq = _ray.distanceSqToSegment( vStart, vEnd, interRay, interSegment );
+
+					if ( distSq > localThresholdSq ) continue;
+
+					interRay.applyMatrix4( this.matrixWorld ); //Move back to world space for distance calculation
+
+					const distance = raycaster.ray.origin.distanceTo( interRay );
+
+					if ( distance < raycaster.near || distance > raycaster.far ) continue;
+
+					intersects.push( {
+
+						distance: distance,
+						// What do we want? intersection point on the ray or on the segment??
+						// point: raycaster.ray.at( distance ),
+						point: interSegment.clone().applyMatrix4( this.matrixWorld ),
+						index: i,
+						face: null,
+						faceIndex: null,
+						object: this
+
+					} );
+
+				}
+
+			}
+
+		} else if ( geometry.isGeometry ) {
+
+			const vertices = geometry.vertices;
+			const nbVertices = vertices.length;
+
+			for ( let i = 0; i < nbVertices - 1; i += step ) {
+
+				const distSq = _ray.distanceSqToSegment( vertices[ i ], vertices[ i + 1 ], interRay, interSegment );
+
+				if ( distSq > localThresholdSq ) continue;
+
+				interRay.applyMatrix4( this.matrixWorld ); //Move back to world space for distance calculation
+
+				const distance = raycaster.ray.origin.distanceTo( interRay );
+
+				if ( distance < raycaster.near || distance > raycaster.far ) continue;
+
+				intersects.push( {
+
+					distance: distance,
+					// What do we want? intersection point on the ray or on the segment??
+					// point: raycaster.ray.at( distance ),
+					point: interSegment.clone().applyMatrix4( this.matrixWorld ),
+					index: i,
+					face: null,
+					faceIndex: null,
+					object: this
+
+				} );
+
+			}
+
+		}
+
+	},
+
+	updateMorphTargets: function () {
+
+		const geometry = this.geometry;
+
+		if ( geometry.isBufferGeometry ) {
+
+			const morphAttributes = geometry.morphAttributes;
+			const keys = Object.keys( morphAttributes );
+
+			if ( keys.length > 0 ) {
+
+				const morphAttribute = morphAttributes[ keys[ 0 ] ];
+
+				if ( morphAttribute !== undefined ) {
+
+					this.morphTargetInfluences = [];
+					this.morphTargetDictionary = {};
+
+					for ( let m = 0, ml = morphAttribute.length; m < ml; m ++ ) {
+
+						const name = morphAttribute[ m ].name || String( m );
+
+						this.morphTargetInfluences.push( 0 );
+						this.morphTargetDictionary[ name ] = m;
+
+					}
+
+				}
+
+			}
+
+		} else {
+
+			const morphTargets = geometry.morphTargets;
+
+			if ( morphTargets !== undefined && morphTargets.length > 0 ) {
+
+				console.error( 'THREE.Line.updateMorphTargets() does not support THREE.Geometry. Use THREE.BufferGeometry instead.' );
+
+			}
+
+		}
+
+	}
+
+} );
+
+function LineLoop( geometry, material ) {
+
+	Line.call( this, geometry, material );
+
+	this.type = 'LineLoop';
+
+}
+
+LineLoop.prototype = Object.assign( Object.create( Line.prototype ), {
+
+	constructor: LineLoop,
+
+	isLineLoop: true,
+
+} );
+
+const _start$1 = new Vector3$1();
+const _end$1 = new Vector3$1();
+
+function LineSegments( geometry, material ) {
+
+	Line.call( this, geometry, material );
+
+	this.type = 'LineSegments';
+
+}
+
+LineSegments.prototype = Object.assign( Object.create( Line.prototype ), {
+
+	constructor: LineSegments,
+
+	isLineSegments: true,
+
+	computeLineDistances: function () {
+
+		const geometry = this.geometry;
+
+		if ( geometry.isBufferGeometry ) {
+
+			// we assume non-indexed geometry
+
+			if ( geometry.index === null ) {
+
+				const positionAttribute = geometry.attributes.position;
+				const lineDistances = [];
+
+				for ( let i = 0, l = positionAttribute.count; i < l; i += 2 ) {
+
+					_start$1.fromBufferAttribute( positionAttribute, i );
+					_end$1.fromBufferAttribute( positionAttribute, i + 1 );
+
+					lineDistances[ i ] = ( i === 0 ) ? 0 : lineDistances[ i - 1 ];
+					lineDistances[ i + 1 ] = lineDistances[ i ] + _start$1.distanceTo( _end$1 );
+
+				}
+
+				geometry.setAttribute( 'lineDistance', new Float32BufferAttribute$1( lineDistances, 1 ) );
+
+			} else {
+
+				console.warn( 'THREE.LineSegments.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.' );
+
+			}
+
+		} else if ( geometry.isGeometry ) {
+
+			const vertices = geometry.vertices;
+			const lineDistances = geometry.lineDistances;
+
+			for ( let i = 0, l = vertices.length; i < l; i += 2 ) {
+
+				_start$1.copy( vertices[ i ] );
+				_end$1.copy( vertices[ i + 1 ] );
+
+				lineDistances[ i ] = ( i === 0 ) ? 0 : lineDistances[ i - 1 ];
+				lineDistances[ i + 1 ] = lineDistances[ i ] + _start$1.distanceTo( _end$1 );
+
+			}
+
+		}
+
+		return this;
+
+	}
+
+} );
+
 // threejs.org/license
 const REVISION = '122';
 const CullFaceNone = 0;
@@ -144,8 +3762,6 @@ const WrapAroundEnding = 2402;
 const NormalAnimationBlendMode = 2500;
 const AdditiveAnimationBlendMode = 2501;
 const TrianglesDrawMode = 0;
-const TriangleStripDrawMode = 1;
-const TriangleFanDrawMode = 2;
 const LinearEncoding = 3000;
 const sRGBEncoding = 3001;
 const GammaEncoding = 3007;
@@ -3587,9 +7203,9 @@ class Vector3 {
 
 	projectOnPlane( planeNormal ) {
 
-		_vector.copy( this ).projectOnVector( planeNormal );
+		_vector$1.copy( this ).projectOnVector( planeNormal );
 
-		return this.sub( _vector );
+		return this.sub( _vector$1 );
 
 	}
 
@@ -3598,7 +7214,7 @@ class Vector3 {
 		// reflect incident vector off plane orthogonal to normal
 		// normal is assumed to have unit length
 
-		return this.sub( _vector.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
+		return this.sub( _vector$1.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
 
 	}
 
@@ -3762,7 +7378,7 @@ class Vector3 {
 
 }
 
-const _vector = /*@__PURE__*/ new Vector3();
+const _vector$1 = /*@__PURE__*/ new Vector3();
 const _quaternion = /*@__PURE__*/ new Quaternion();
 
 class Box3 {
@@ -3867,7 +7483,7 @@ class Box3 {
 
 	setFromCenterAndSize( center, size ) {
 
-		const halfSize = _vector$1.copy( size ).multiplyScalar( 0.5 );
+		const halfSize = _vector$1$1.copy( size ).multiplyScalar( 0.5 );
 
 		this.min.copy( center ).sub( halfSize );
 		this.max.copy( center ).add( halfSize );
@@ -4053,10 +7669,10 @@ class Box3 {
 	intersectsSphere( sphere ) {
 
 		// Find the point on the AABB closest to the sphere center.
-		this.clampPoint( sphere.center, _vector$1 );
+		this.clampPoint( sphere.center, _vector$1$1 );
 
 		// If that point is inside the sphere, the AABB and sphere intersect.
-		return _vector$1.distanceToSquared( sphere.center ) <= ( sphere.radius * sphere.radius );
+		return _vector$1$1.distanceToSquared( sphere.center ) <= ( sphere.radius * sphere.radius );
 
 	}
 
@@ -4175,7 +7791,7 @@ class Box3 {
 
 	distanceToPoint( point ) {
 
-		const clampedPoint = _vector$1.copy( point ).clamp( this.min, this.max );
+		const clampedPoint = _vector$1$1.copy( point ).clamp( this.min, this.max );
 
 		return clampedPoint.sub( point ).length();
 
@@ -4192,7 +7808,7 @@ class Box3 {
 
 		this.getCenter( target.center );
 
-		target.radius = this.getSize( _vector$1 ).length() * 0.5;
+		target.radius = this.getSize( _vector$1$1 ).length() * 0.5;
 
 		return target;
 
@@ -4294,7 +7910,7 @@ const _points = [
 	/*@__PURE__*/ new Vector3()
 ];
 
-const _vector$1 = /*@__PURE__*/ new Vector3();
+const _vector$1$1 = /*@__PURE__*/ new Vector3();
 
 const _box = /*@__PURE__*/ new Box3();
 
@@ -10888,9 +14504,9 @@ BufferGeometry.prototype = Object.assign( Object.create( EventDispatcher.prototy
 
 } );
 
-const _inverseMatrix = new Matrix4();
-const _ray = new Ray();
-const _sphere = new Sphere();
+const _inverseMatrix$1 = new Matrix4();
+const _ray$1 = new Ray();
+const _sphere$1 = new Sphere();
 
 const _vA = new Vector3();
 const _vB = new Vector3();
@@ -11010,21 +14626,21 @@ Mesh.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
 		if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
 
-		_sphere.copy( geometry.boundingSphere );
-		_sphere.applyMatrix4( matrixWorld );
+		_sphere$1.copy( geometry.boundingSphere );
+		_sphere$1.applyMatrix4( matrixWorld );
 
-		if ( raycaster.ray.intersectsSphere( _sphere ) === false ) return;
+		if ( raycaster.ray.intersectsSphere( _sphere$1 ) === false ) return;
 
 		//
 
-		_inverseMatrix.getInverse( matrixWorld );
-		_ray.copy( raycaster.ray ).applyMatrix4( _inverseMatrix );
+		_inverseMatrix$1.getInverse( matrixWorld );
+		_ray$1.copy( raycaster.ray ).applyMatrix4( _inverseMatrix$1 );
 
 		// Check boundingBox before continuing
 
 		if ( geometry.boundingBox !== null ) {
 
-			if ( _ray.intersectsBox( geometry.boundingBox ) === false ) return;
+			if ( _ray$1.intersectsBox( geometry.boundingBox ) === false ) return;
 
 		}
 
@@ -11061,7 +14677,7 @@ Mesh.prototype = Object.assign( Object.create( Object3D.prototype ), {
 							const b = index.getX( j + 1 );
 							const c = index.getX( j + 2 );
 
-							intersection = checkBufferGeometryIntersection( this, groupMaterial, raycaster, _ray, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
+							intersection = checkBufferGeometryIntersection( this, groupMaterial, raycaster, _ray$1, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
 
 							if ( intersection ) {
 
@@ -11086,7 +14702,7 @@ Mesh.prototype = Object.assign( Object.create( Object3D.prototype ), {
 						const b = index.getX( i + 1 );
 						const c = index.getX( i + 2 );
 
-						intersection = checkBufferGeometryIntersection( this, material, raycaster, _ray, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
+						intersection = checkBufferGeometryIntersection( this, material, raycaster, _ray$1, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
 
 						if ( intersection ) {
 
@@ -11119,7 +14735,7 @@ Mesh.prototype = Object.assign( Object.create( Object3D.prototype ), {
 							const b = j + 1;
 							const c = j + 2;
 
-							intersection = checkBufferGeometryIntersection( this, groupMaterial, raycaster, _ray, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
+							intersection = checkBufferGeometryIntersection( this, groupMaterial, raycaster, _ray$1, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
 
 							if ( intersection ) {
 
@@ -11144,7 +14760,7 @@ Mesh.prototype = Object.assign( Object.create( Object3D.prototype ), {
 						const b = i + 1;
 						const c = i + 2;
 
-						intersection = checkBufferGeometryIntersection( this, material, raycaster, _ray, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
+						intersection = checkBufferGeometryIntersection( this, material, raycaster, _ray$1, position, morphPosition, morphTargetsRelative, uv, uv2, a, b, c );
 
 						if ( intersection ) {
 
@@ -11181,7 +14797,7 @@ Mesh.prototype = Object.assign( Object.create( Object3D.prototype ), {
 				const fvB = vertices[ face.b ];
 				const fvC = vertices[ face.c ];
 
-				intersection = checkIntersection( this, faceMaterial, raycaster, _ray, fvA, fvB, fvC, _intersectionPoint );
+				intersection = checkIntersection( this, faceMaterial, raycaster, _ray$1, fvA, fvB, fvC, _intersectionPoint );
 
 				if ( intersection ) {
 
@@ -12364,7 +15980,7 @@ DataTexture.prototype.constructor = DataTexture;
 
 DataTexture.prototype.isDataTexture = true;
 
-const _sphere$1 = /*@__PURE__*/ new Sphere();
+const _sphere$1$1 = /*@__PURE__*/ new Sphere();
 const _vector$5 = /*@__PURE__*/ new Vector3();
 
 class Frustum {
@@ -12445,19 +16061,19 @@ class Frustum {
 
 		if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
 
-		_sphere$1.copy( geometry.boundingSphere ).applyMatrix4( object.matrixWorld );
+		_sphere$1$1.copy( geometry.boundingSphere ).applyMatrix4( object.matrixWorld );
 
-		return this.intersectsSphere( _sphere$1 );
+		return this.intersectsSphere( _sphere$1$1 );
 
 	}
 
 	intersectsSprite( sprite ) {
 
-		_sphere$1.center.set( 0, 0, 0 );
-		_sphere$1.radius = 0.7071067811865476;
-		_sphere$1.applyMatrix4( sprite.matrixWorld );
+		_sphere$1$1.center.set( 0, 0, 0 );
+		_sphere$1$1.radius = 0.7071067811865476;
+		_sphere$1$1.applyMatrix4( sprite.matrixWorld );
 
-		return this.intersectsSphere( _sphere$1 );
+		return this.intersectsSphere( _sphere$1$1 );
 
 	}
 
@@ -25094,7 +28710,7 @@ class Scene extends Object3D {
 
 }
 
-function InterleavedBuffer( array, stride ) {
+function InterleavedBuffer$1( array, stride ) {
 
 	this.array = array;
 	this.stride = stride;
@@ -25109,7 +28725,7 @@ function InterleavedBuffer( array, stride ) {
 
 }
 
-Object.defineProperty( InterleavedBuffer.prototype, 'needsUpdate', {
+Object.defineProperty( InterleavedBuffer$1.prototype, 'needsUpdate', {
 
 	set: function ( value ) {
 
@@ -25119,7 +28735,7 @@ Object.defineProperty( InterleavedBuffer.prototype, 'needsUpdate', {
 
 } );
 
-Object.assign( InterleavedBuffer.prototype, {
+Object.assign( InterleavedBuffer$1.prototype, {
 
 	isInterleavedBuffer: true,
 
@@ -25191,7 +28807,7 @@ Object.assign( InterleavedBuffer.prototype, {
 
 		const array = new this.array.constructor( data.arrayBuffers[ this.array.buffer._uuid ] );
 
-		const ib = new InterleavedBuffer( array, this.stride );
+		const ib = new InterleavedBuffer$1( array, this.stride );
 		ib.setUsage( this.usage );
 
 		return ib;
@@ -25243,7 +28859,7 @@ Object.assign( InterleavedBuffer.prototype, {
 
 const _vector$6 = new Vector3();
 
-function InterleavedBufferAttribute( interleavedBuffer, itemSize, offset, normalized ) {
+function InterleavedBufferAttribute$1( interleavedBuffer, itemSize, offset, normalized ) {
 
 	this.name = '';
 
@@ -25255,7 +28871,7 @@ function InterleavedBufferAttribute( interleavedBuffer, itemSize, offset, normal
 
 }
 
-Object.defineProperties( InterleavedBufferAttribute.prototype, {
+Object.defineProperties( InterleavedBufferAttribute$1.prototype, {
 
 	count: {
 
@@ -25289,7 +28905,7 @@ Object.defineProperties( InterleavedBufferAttribute.prototype, {
 
 } );
 
-Object.assign( InterleavedBufferAttribute.prototype, {
+Object.assign( InterleavedBufferAttribute$1.prototype, {
 
 	isInterleavedBufferAttribute: true,
 
@@ -25439,7 +29055,7 @@ Object.assign( InterleavedBufferAttribute.prototype, {
 
 			}
 
-			return new InterleavedBufferAttribute( data.interleavedBuffers[ this.data.uuid ], this.itemSize, this.offset, this.normalized );
+			return new InterleavedBufferAttribute$1( data.interleavedBuffers[ this.data.uuid ], this.itemSize, this.offset, this.normalized );
 
 		}
 
@@ -25593,11 +29209,11 @@ function Sprite( material ) {
 			- 0.5, 0.5, 0, 0, 1
 		] );
 
-		const interleavedBuffer = new InterleavedBuffer( float32Array, 5 );
+		const interleavedBuffer = new InterleavedBuffer$1( float32Array, 5 );
 
 		_geometry.setIndex( [ 0, 1, 2,	0, 2, 3 ] );
-		_geometry.setAttribute( 'position', new InterleavedBufferAttribute( interleavedBuffer, 3, 0, false ) );
-		_geometry.setAttribute( 'uv', new InterleavedBufferAttribute( interleavedBuffer, 2, 3, false ) );
+		_geometry.setAttribute( 'position', new InterleavedBufferAttribute$1( interleavedBuffer, 3, 0, false ) );
+		_geometry.setAttribute( 'uv', new InterleavedBufferAttribute$1( interleavedBuffer, 2, 3, false ) );
 
 	}
 
@@ -26258,7 +29874,7 @@ Object.assign( Skeleton.prototype, {
 
 } );
 
-function Bone() {
+function Bone$1() {
 
 	Object3D.call( this );
 
@@ -26266,9 +29882,9 @@ function Bone() {
 
 }
 
-Bone.prototype = Object.assign( Object.create( Object3D.prototype ), {
+Bone$1.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
-	constructor: Bone,
+	constructor: Bone$1,
 
 	isBone: true
 
@@ -26393,7 +30009,7 @@ InstancedMesh.prototype = Object.assign( Object.create( Mesh.prototype ), {
  * }
  */
 
-function LineBasicMaterial( parameters ) {
+function LineBasicMaterial$1( parameters ) {
 
 	Material.call( this );
 
@@ -26411,12 +30027,12 @@ function LineBasicMaterial( parameters ) {
 
 }
 
-LineBasicMaterial.prototype = Object.create( Material.prototype );
-LineBasicMaterial.prototype.constructor = LineBasicMaterial;
+LineBasicMaterial$1.prototype = Object.create( Material.prototype );
+LineBasicMaterial$1.prototype.constructor = LineBasicMaterial$1;
 
-LineBasicMaterial.prototype.isLineBasicMaterial = true;
+LineBasicMaterial$1.prototype.isLineBasicMaterial = true;
 
-LineBasicMaterial.prototype.copy = function ( source ) {
+LineBasicMaterial$1.prototype.copy = function ( source ) {
 
 	Material.prototype.copy.call( this, source );
 
@@ -26432,13 +30048,13 @@ LineBasicMaterial.prototype.copy = function ( source ) {
 
 };
 
-const _start = new Vector3();
-const _end = new Vector3();
-const _inverseMatrix$1 = new Matrix4();
-const _ray$1 = new Ray();
+const _start$2 = new Vector3();
+const _end$2 = new Vector3();
+const _inverseMatrix$1$1 = new Matrix4();
+const _ray$1$1 = new Ray();
 const _sphere$2 = new Sphere();
 
-function Line( geometry, material, mode ) {
+function Line$1( geometry, material, mode ) {
 
 	if ( mode === 1 ) {
 
@@ -26451,15 +30067,15 @@ function Line( geometry, material, mode ) {
 	this.type = 'Line';
 
 	this.geometry = geometry !== undefined ? geometry : new BufferGeometry();
-	this.material = material !== undefined ? material : new LineBasicMaterial();
+	this.material = material !== undefined ? material : new LineBasicMaterial$1();
 
 	this.updateMorphTargets();
 
 }
 
-Line.prototype = Object.assign( Object.create( Object3D.prototype ), {
+Line$1.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
-	constructor: Line,
+	constructor: Line$1,
 
 	isLine: true,
 
@@ -26489,11 +30105,11 @@ Line.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
 				for ( let i = 1, l = positionAttribute.count; i < l; i ++ ) {
 
-					_start.fromBufferAttribute( positionAttribute, i - 1 );
-					_end.fromBufferAttribute( positionAttribute, i );
+					_start$2.fromBufferAttribute( positionAttribute, i - 1 );
+					_end$2.fromBufferAttribute( positionAttribute, i );
 
 					lineDistances[ i ] = lineDistances[ i - 1 ];
-					lineDistances[ i ] += _start.distanceTo( _end );
+					lineDistances[ i ] += _start$2.distanceTo( _end$2 );
 
 				}
 
@@ -26543,8 +30159,8 @@ Line.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
 		//
 
-		_inverseMatrix$1.getInverse( matrixWorld );
-		_ray$1.copy( raycaster.ray ).applyMatrix4( _inverseMatrix$1 );
+		_inverseMatrix$1$1.getInverse( matrixWorld );
+		_ray$1$1.copy( raycaster.ray ).applyMatrix4( _inverseMatrix$1$1 );
 
 		const localThreshold = threshold / ( ( this.scale.x + this.scale.y + this.scale.z ) / 3 );
 		const localThresholdSq = localThreshold * localThreshold;
@@ -26573,7 +30189,7 @@ Line.prototype = Object.assign( Object.create( Object3D.prototype ), {
 					vStart.fromBufferAttribute( positionAttribute, a );
 					vEnd.fromBufferAttribute( positionAttribute, b );
 
-					const distSq = _ray$1.distanceSqToSegment( vStart, vEnd, interRay, interSegment );
+					const distSq = _ray$1$1.distanceSqToSegment( vStart, vEnd, interRay, interSegment );
 
 					if ( distSq > localThresholdSq ) continue;
 
@@ -26605,7 +30221,7 @@ Line.prototype = Object.assign( Object.create( Object3D.prototype ), {
 					vStart.fromBufferAttribute( positionAttribute, i );
 					vEnd.fromBufferAttribute( positionAttribute, i + 1 );
 
-					const distSq = _ray$1.distanceSqToSegment( vStart, vEnd, interRay, interSegment );
+					const distSq = _ray$1$1.distanceSqToSegment( vStart, vEnd, interRay, interSegment );
 
 					if ( distSq > localThresholdSq ) continue;
 
@@ -26639,7 +30255,7 @@ Line.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
 			for ( let i = 0; i < nbVertices - 1; i += step ) {
 
-				const distSq = _ray$1.distanceSqToSegment( vertices[ i ], vertices[ i + 1 ], interRay, interSegment );
+				const distSq = _ray$1$1.distanceSqToSegment( vertices[ i ], vertices[ i + 1 ], interRay, interSegment );
 
 				if ( distSq > localThresholdSq ) continue;
 
@@ -26715,20 +30331,20 @@ Line.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
 } );
 
-const _start$1 = new Vector3();
-const _end$1 = new Vector3();
+const _start$1$1 = new Vector3();
+const _end$1$1 = new Vector3();
 
-function LineSegments( geometry, material ) {
+function LineSegments$1( geometry, material ) {
 
-	Line.call( this, geometry, material );
+	Line$1.call( this, geometry, material );
 
 	this.type = 'LineSegments';
 
 }
 
-LineSegments.prototype = Object.assign( Object.create( Line.prototype ), {
+LineSegments$1.prototype = Object.assign( Object.create( Line$1.prototype ), {
 
-	constructor: LineSegments,
+	constructor: LineSegments$1,
 
 	isLineSegments: true,
 
@@ -26747,11 +30363,11 @@ LineSegments.prototype = Object.assign( Object.create( Line.prototype ), {
 
 				for ( let i = 0, l = positionAttribute.count; i < l; i += 2 ) {
 
-					_start$1.fromBufferAttribute( positionAttribute, i );
-					_end$1.fromBufferAttribute( positionAttribute, i + 1 );
+					_start$1$1.fromBufferAttribute( positionAttribute, i );
+					_end$1$1.fromBufferAttribute( positionAttribute, i + 1 );
 
 					lineDistances[ i ] = ( i === 0 ) ? 0 : lineDistances[ i - 1 ];
-					lineDistances[ i + 1 ] = lineDistances[ i ] + _start$1.distanceTo( _end$1 );
+					lineDistances[ i + 1 ] = lineDistances[ i ] + _start$1$1.distanceTo( _end$1$1 );
 
 				}
 
@@ -26770,11 +30386,11 @@ LineSegments.prototype = Object.assign( Object.create( Line.prototype ), {
 
 			for ( let i = 0, l = vertices.length; i < l; i += 2 ) {
 
-				_start$1.copy( vertices[ i ] );
-				_end$1.copy( vertices[ i + 1 ] );
+				_start$1$1.copy( vertices[ i ] );
+				_end$1$1.copy( vertices[ i + 1 ] );
 
 				lineDistances[ i ] = ( i === 0 ) ? 0 : lineDistances[ i - 1 ];
-				lineDistances[ i + 1 ] = lineDistances[ i ] + _start$1.distanceTo( _end$1 );
+				lineDistances[ i + 1 ] = lineDistances[ i ] + _start$1$1.distanceTo( _end$1$1 );
 
 			}
 
@@ -26786,17 +30402,17 @@ LineSegments.prototype = Object.assign( Object.create( Line.prototype ), {
 
 } );
 
-function LineLoop( geometry, material ) {
+function LineLoop$1( geometry, material ) {
 
-	Line.call( this, geometry, material );
+	Line$1.call( this, geometry, material );
 
 	this.type = 'LineLoop';
 
 }
 
-LineLoop.prototype = Object.assign( Object.create( Line.prototype ), {
+LineLoop$1.prototype = Object.assign( Object.create( Line$1.prototype ), {
 
-	constructor: LineLoop,
+	constructor: LineLoop$1,
 
 	isLineLoop: true,
 
@@ -27122,7 +30738,7 @@ CompressedTexture.prototype.constructor = CompressedTexture;
 
 CompressedTexture.prototype.isCompressedTexture = true;
 
-function CanvasTexture( canvas, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy ) {
+function CanvasTexture$1( canvas, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy ) {
 
 	Texture.call( this, canvas, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy );
 
@@ -27130,9 +30746,9 @@ function CanvasTexture( canvas, mapping, wrapS, wrapT, magFilter, minFilter, for
 
 }
 
-CanvasTexture.prototype = Object.create( Texture.prototype );
-CanvasTexture.prototype.constructor = CanvasTexture;
-CanvasTexture.prototype.isCanvasTexture = true;
+CanvasTexture$1.prototype = Object.create( Texture.prototype );
+CanvasTexture$1.prototype.constructor = CanvasTexture$1;
+CanvasTexture$1.prototype.isCanvasTexture = true;
 
 function DepthTexture( width, height, type, mapping, wrapS, wrapT, magFilter, minFilter, anisotropy, format ) {
 
@@ -31596,7 +35212,7 @@ MeshMatcapMaterial.prototype.copy = function ( source ) {
 
 function LineDashedMaterial( parameters ) {
 
-	LineBasicMaterial.call( this );
+	LineBasicMaterial$1.call( this );
 
 	this.type = 'LineDashedMaterial';
 
@@ -31608,14 +35224,14 @@ function LineDashedMaterial( parameters ) {
 
 }
 
-LineDashedMaterial.prototype = Object.create( LineBasicMaterial.prototype );
+LineDashedMaterial.prototype = Object.create( LineBasicMaterial$1.prototype );
 LineDashedMaterial.prototype.constructor = LineDashedMaterial;
 
 LineDashedMaterial.prototype.isLineDashedMaterial = true;
 
 LineDashedMaterial.prototype.copy = function ( source ) {
 
-	LineBasicMaterial.prototype.copy.call( this, source );
+	LineBasicMaterial$1.prototype.copy.call( this, source );
 
 	this.scale = source.scale;
 	this.dashSize = source.dashSize;
@@ -31643,16 +35259,16 @@ var Materials = /*#__PURE__*/Object.freeze({
 	MeshBasicMaterial: MeshBasicMaterial,
 	MeshMatcapMaterial: MeshMatcapMaterial,
 	LineDashedMaterial: LineDashedMaterial,
-	LineBasicMaterial: LineBasicMaterial,
+	LineBasicMaterial: LineBasicMaterial$1,
 	Material: Material
 });
 
-const AnimationUtils = {
+const AnimationUtils$1 = {
 
 	// same as Array.prototype.slice, but also works on typed arrays
 	arraySlice: function ( array, from, to ) {
 
-		if ( AnimationUtils.isTypedArray( array ) ) {
+		if ( AnimationUtils$1.isTypedArray( array ) ) {
 
 			// in ios9 array.subarray(from, undefined) will return empty array
 			// but array.subarray(from) or array.subarray(from, len) is correct
@@ -31839,8 +35455,8 @@ const AnimationUtils = {
 
 			if ( times.length === 0 ) continue;
 
-			track.times = AnimationUtils.convertArray( times, track.times.constructor );
-			track.values = AnimationUtils.convertArray( values, track.values.constructor );
+			track.times = AnimationUtils$1.convertArray( times, track.times.constructor );
+			track.values = AnimationUtils$1.convertArray( values, track.values.constructor );
 
 			tracks.push( track );
 
@@ -31931,14 +35547,14 @@ const AnimationUtils = {
 				// Reference frame is earlier than the first keyframe, so just use the first keyframe
 				const startIndex = referenceOffset;
 				const endIndex = referenceValueSize - referenceOffset;
-				referenceValue = AnimationUtils.arraySlice( referenceTrack.values, startIndex, endIndex );
+				referenceValue = AnimationUtils$1.arraySlice( referenceTrack.values, startIndex, endIndex );
 
 			} else if ( referenceTime >= referenceTrack.times[ lastIndex ] ) {
 
 				// Reference frame is after the last keyframe, so just use the last keyframe
 				const startIndex = lastIndex * referenceValueSize + referenceOffset;
 				const endIndex = startIndex + referenceValueSize - referenceOffset;
-				referenceValue = AnimationUtils.arraySlice( referenceTrack.values, startIndex, endIndex );
+				referenceValue = AnimationUtils$1.arraySlice( referenceTrack.values, startIndex, endIndex );
 
 			} else {
 
@@ -31947,7 +35563,7 @@ const AnimationUtils = {
 				const startIndex = referenceOffset;
 				const endIndex = referenceValueSize - referenceOffset;
 				interpolant.evaluate( referenceTime );
-				referenceValue = AnimationUtils.arraySlice( interpolant.resultBuffer, startIndex, endIndex );
+				referenceValue = AnimationUtils$1.arraySlice( interpolant.resultBuffer, startIndex, endIndex );
 
 			}
 
@@ -32024,7 +35640,7 @@ const AnimationUtils = {
  *
  */
 
-function Interpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+function Interpolant$1( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
 
 	this.parameterPositions = parameterPositions;
 	this._cachedIndex = 0;
@@ -32036,7 +35652,7 @@ function Interpolant( parameterPositions, sampleValues, sampleSize, resultBuffer
 
 }
 
-Object.assign( Interpolant.prototype, {
+Object.assign( Interpolant$1.prototype, {
 
 	evaluate: function ( t ) {
 
@@ -32248,13 +35864,13 @@ Object.assign( Interpolant.prototype, {
 } );
 
 // DECLARE ALIAS AFTER assign prototype
-Object.assign( Interpolant.prototype, {
+Object.assign( Interpolant$1.prototype, {
 
 	//( 0, t, t0 ), returns this.resultBuffer
-	beforeStart_: Interpolant.prototype.copySampleValue_,
+	beforeStart_: Interpolant$1.prototype.copySampleValue_,
 
 	//( N-1, tN-1, t ), returns this.resultBuffer
-	afterEnd_: Interpolant.prototype.copySampleValue_,
+	afterEnd_: Interpolant$1.prototype.copySampleValue_,
 
 } );
 
@@ -32266,9 +35882,9 @@ Object.assign( Interpolant.prototype, {
  * over their parameter interval.
  */
 
-function CubicInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+function CubicInterpolant$1( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
 
-	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+	Interpolant$1.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
 
 	this._weightPrev = - 0;
 	this._offsetPrev = - 0;
@@ -32277,9 +35893,9 @@ function CubicInterpolant( parameterPositions, sampleValues, sampleSize, resultB
 
 }
 
-CubicInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+CubicInterpolant$1.prototype = Object.assign( Object.create( Interpolant$1.prototype ), {
 
-	constructor: CubicInterpolant,
+	constructor: CubicInterpolant$1,
 
 	DefaultSettings_: {
 
@@ -32406,15 +36022,15 @@ CubicInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype
 
 } );
 
-function LinearInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+function LinearInterpolant$1( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
 
-	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+	Interpolant$1.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
 
 }
 
-LinearInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+LinearInterpolant$1.prototype = Object.assign( Object.create( Interpolant$1.prototype ), {
 
-	constructor: LinearInterpolant,
+	constructor: LinearInterpolant$1,
 
 	interpolate_: function ( i1, t0, t, t1 ) {
 
@@ -32448,15 +36064,15 @@ LinearInterpolant.prototype = Object.assign( Object.create( Interpolant.prototyp
  * the parameter.
  */
 
-function DiscreteInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+function DiscreteInterpolant$1( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
 
-	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+	Interpolant$1.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
 
 }
 
-DiscreteInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+DiscreteInterpolant$1.prototype = Object.assign( Object.create( Interpolant$1.prototype ), {
 
-	constructor: DiscreteInterpolant,
+	constructor: DiscreteInterpolant$1,
 
 	interpolate_: function ( i1 /*, t0, t, t1 */ ) {
 
@@ -32466,15 +36082,15 @@ DiscreteInterpolant.prototype = Object.assign( Object.create( Interpolant.protot
 
 } );
 
-function KeyframeTrack( name, times, values, interpolation ) {
+function KeyframeTrack$1( name, times, values, interpolation ) {
 
 	if ( name === undefined ) throw new Error( 'THREE.KeyframeTrack: track name is undefined' );
 	if ( times === undefined || times.length === 0 ) throw new Error( 'THREE.KeyframeTrack: no keyframes in track named ' + name );
 
 	this.name = name;
 
-	this.times = AnimationUtils.convertArray( times, this.TimeBufferType );
-	this.values = AnimationUtils.convertArray( values, this.ValueBufferType );
+	this.times = AnimationUtils$1.convertArray( times, this.TimeBufferType );
+	this.values = AnimationUtils$1.convertArray( values, this.ValueBufferType );
 
 	this.setInterpolation( interpolation || this.DefaultInterpolation );
 
@@ -32482,7 +36098,7 @@ function KeyframeTrack( name, times, values, interpolation ) {
 
 // Static methods
 
-Object.assign( KeyframeTrack, {
+Object.assign( KeyframeTrack$1, {
 
 	// Serialization (in static context, because of constructor invocation
 	// and automatic invocation of .toJSON):
@@ -32504,8 +36120,8 @@ Object.assign( KeyframeTrack, {
 			json = {
 
 				'name': track.name,
-				'times': AnimationUtils.convertArray( track.times, Array ),
-				'values': AnimationUtils.convertArray( track.values, Array )
+				'times': AnimationUtils$1.convertArray( track.times, Array ),
+				'values': AnimationUtils$1.convertArray( track.values, Array )
 
 			};
 
@@ -32527,9 +36143,9 @@ Object.assign( KeyframeTrack, {
 
 } );
 
-Object.assign( KeyframeTrack.prototype, {
+Object.assign( KeyframeTrack$1.prototype, {
 
-	constructor: KeyframeTrack,
+	constructor: KeyframeTrack$1,
 
 	TimeBufferType: Float32Array,
 
@@ -32539,19 +36155,19 @@ Object.assign( KeyframeTrack.prototype, {
 
 	InterpolantFactoryMethodDiscrete: function ( result ) {
 
-		return new DiscreteInterpolant( this.times, this.values, this.getValueSize(), result );
+		return new DiscreteInterpolant$1( this.times, this.values, this.getValueSize(), result );
 
 	},
 
 	InterpolantFactoryMethodLinear: function ( result ) {
 
-		return new LinearInterpolant( this.times, this.values, this.getValueSize(), result );
+		return new LinearInterpolant$1( this.times, this.values, this.getValueSize(), result );
 
 	},
 
 	InterpolantFactoryMethodSmooth: function ( result ) {
 
-		return new CubicInterpolant( this.times, this.values, this.getValueSize(), result );
+		return new CubicInterpolant$1( this.times, this.values, this.getValueSize(), result );
 
 	},
 
@@ -32711,8 +36327,8 @@ Object.assign( KeyframeTrack.prototype, {
 			}
 
 			const stride = this.getValueSize();
-			this.times = AnimationUtils.arraySlice( times, from, to );
-			this.values = AnimationUtils.arraySlice( this.values, from * stride, to * stride );
+			this.times = AnimationUtils$1.arraySlice( times, from, to );
+			this.values = AnimationUtils$1.arraySlice( this.values, from * stride, to * stride );
 
 		}
 
@@ -32773,7 +36389,7 @@ Object.assign( KeyframeTrack.prototype, {
 
 		if ( values !== undefined ) {
 
-			if ( AnimationUtils.isTypedArray( values ) ) {
+			if ( AnimationUtils$1.isTypedArray( values ) ) {
 
 				for ( let i = 0, n = values.length; i !== n; ++ i ) {
 
@@ -32802,8 +36418,8 @@ Object.assign( KeyframeTrack.prototype, {
 	optimize: function () {
 
 		// times or values may be shared with other tracks, so overwriting is unsafe
-		const times = AnimationUtils.arraySlice( this.times ),
-			values = AnimationUtils.arraySlice( this.values ),
+		const times = AnimationUtils$1.arraySlice( this.times ),
+			values = AnimationUtils$1.arraySlice( this.values ),
 			stride = this.getValueSize(),
 
 			smoothInterpolation = this.getInterpolation() === InterpolateSmooth,
@@ -32896,8 +36512,8 @@ Object.assign( KeyframeTrack.prototype, {
 
 		if ( writeIndex !== times.length ) {
 
-			this.times = AnimationUtils.arraySlice( times, 0, writeIndex );
-			this.values = AnimationUtils.arraySlice( values, 0, writeIndex * stride );
+			this.times = AnimationUtils$1.arraySlice( times, 0, writeIndex );
+			this.values = AnimationUtils$1.arraySlice( values, 0, writeIndex * stride );
 
 		} else {
 
@@ -32912,8 +36528,8 @@ Object.assign( KeyframeTrack.prototype, {
 
 	clone: function () {
 
-		const times = AnimationUtils.arraySlice( this.times, 0 );
-		const values = AnimationUtils.arraySlice( this.values, 0 );
+		const times = AnimationUtils$1.arraySlice( this.times, 0 );
+		const values = AnimationUtils$1.arraySlice( this.values, 0 );
 
 		const TypedKeyframeTrack = this.constructor;
 		const track = new TypedKeyframeTrack( this.name, times, values );
@@ -32931,15 +36547,15 @@ Object.assign( KeyframeTrack.prototype, {
  * A Track of Boolean keyframe values.
  */
 
-function BooleanKeyframeTrack( name, times, values ) {
+function BooleanKeyframeTrack$1( name, times, values ) {
 
-	KeyframeTrack.call( this, name, times, values );
+	KeyframeTrack$1.call( this, name, times, values );
 
 }
 
-BooleanKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+BooleanKeyframeTrack$1.prototype = Object.assign( Object.create( KeyframeTrack$1.prototype ), {
 
-	constructor: BooleanKeyframeTrack,
+	constructor: BooleanKeyframeTrack$1,
 
 	ValueTypeName: 'bool',
 	ValueBufferType: Array,
@@ -32959,15 +36575,15 @@ BooleanKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.pro
  * A Track of keyframe values that represent color.
  */
 
-function ColorKeyframeTrack( name, times, values, interpolation ) {
+function ColorKeyframeTrack$1( name, times, values, interpolation ) {
 
-	KeyframeTrack.call( this, name, times, values, interpolation );
+	KeyframeTrack$1.call( this, name, times, values, interpolation );
 
 }
 
-ColorKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+ColorKeyframeTrack$1.prototype = Object.assign( Object.create( KeyframeTrack$1.prototype ), {
 
-	constructor: ColorKeyframeTrack,
+	constructor: ColorKeyframeTrack$1,
 
 	ValueTypeName: 'color'
 
@@ -32984,15 +36600,15 @@ ColorKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.proto
  * A Track of numeric keyframe values.
  */
 
-function NumberKeyframeTrack( name, times, values, interpolation ) {
+function NumberKeyframeTrack$1( name, times, values, interpolation ) {
 
-	KeyframeTrack.call( this, name, times, values, interpolation );
+	KeyframeTrack$1.call( this, name, times, values, interpolation );
 
 }
 
-NumberKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+NumberKeyframeTrack$1.prototype = Object.assign( Object.create( KeyframeTrack$1.prototype ), {
 
-	constructor: NumberKeyframeTrack,
+	constructor: NumberKeyframeTrack$1,
 
 	ValueTypeName: 'number'
 
@@ -33006,15 +36622,15 @@ NumberKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prot
  * Spherical linear unit quaternion interpolant.
  */
 
-function QuaternionLinearInterpolant( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
+function QuaternionLinearInterpolant$1( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
 
-	Interpolant.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
+	Interpolant$1.call( this, parameterPositions, sampleValues, sampleSize, resultBuffer );
 
 }
 
-QuaternionLinearInterpolant.prototype = Object.assign( Object.create( Interpolant.prototype ), {
+QuaternionLinearInterpolant$1.prototype = Object.assign( Object.create( Interpolant$1.prototype ), {
 
-	constructor: QuaternionLinearInterpolant,
+	constructor: QuaternionLinearInterpolant$1,
 
 	interpolate_: function ( i1, t0, t, t1 ) {
 
@@ -33042,15 +36658,15 @@ QuaternionLinearInterpolant.prototype = Object.assign( Object.create( Interpolan
  * A Track of quaternion keyframe values.
  */
 
-function QuaternionKeyframeTrack( name, times, values, interpolation ) {
+function QuaternionKeyframeTrack$1( name, times, values, interpolation ) {
 
-	KeyframeTrack.call( this, name, times, values, interpolation );
+	KeyframeTrack$1.call( this, name, times, values, interpolation );
 
 }
 
-QuaternionKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+QuaternionKeyframeTrack$1.prototype = Object.assign( Object.create( KeyframeTrack$1.prototype ), {
 
-	constructor: QuaternionKeyframeTrack,
+	constructor: QuaternionKeyframeTrack$1,
 
 	ValueTypeName: 'quaternion',
 
@@ -33060,7 +36676,7 @@ QuaternionKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.
 
 	InterpolantFactoryMethodLinear: function ( result ) {
 
-		return new QuaternionLinearInterpolant( this.times, this.values, this.getValueSize(), result );
+		return new QuaternionLinearInterpolant$1( this.times, this.values, this.getValueSize(), result );
 
 	},
 
@@ -33072,15 +36688,15 @@ QuaternionKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.
  * A Track that interpolates Strings
  */
 
-function StringKeyframeTrack( name, times, values, interpolation ) {
+function StringKeyframeTrack$1( name, times, values, interpolation ) {
 
-	KeyframeTrack.call( this, name, times, values, interpolation );
+	KeyframeTrack$1.call( this, name, times, values, interpolation );
 
 }
 
-StringKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+StringKeyframeTrack$1.prototype = Object.assign( Object.create( KeyframeTrack$1.prototype ), {
 
-	constructor: StringKeyframeTrack,
+	constructor: StringKeyframeTrack$1,
 
 	ValueTypeName: 'string',
 	ValueBufferType: Array,
@@ -33097,15 +36713,15 @@ StringKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prot
  * A Track of vectored keyframe values.
  */
 
-function VectorKeyframeTrack( name, times, values, interpolation ) {
+function VectorKeyframeTrack$1( name, times, values, interpolation ) {
 
-	KeyframeTrack.call( this, name, times, values, interpolation );
+	KeyframeTrack$1.call( this, name, times, values, interpolation );
 
 }
 
-VectorKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prototype ), {
+VectorKeyframeTrack$1.prototype = Object.assign( Object.create( KeyframeTrack$1.prototype ), {
 
-	constructor: VectorKeyframeTrack,
+	constructor: VectorKeyframeTrack$1,
 
 	ValueTypeName: 'vector'
 
@@ -33115,7 +36731,7 @@ VectorKeyframeTrack.prototype = Object.assign( Object.create( KeyframeTrack.prot
 
 } );
 
-function AnimationClip( name, duration, tracks, blendMode ) {
+function AnimationClip$1( name, duration, tracks, blendMode ) {
 
 	this.name = name;
 	this.tracks = tracks;
@@ -33133,7 +36749,7 @@ function AnimationClip( name, duration, tracks, blendMode ) {
 
 }
 
-function getTrackTypeForValueTypeName( typeName ) {
+function getTrackTypeForValueTypeName$1( typeName ) {
 
 	switch ( typeName.toLowerCase() ) {
 
@@ -33143,31 +36759,31 @@ function getTrackTypeForValueTypeName( typeName ) {
 		case 'number':
 		case 'integer':
 
-			return NumberKeyframeTrack;
+			return NumberKeyframeTrack$1;
 
 		case 'vector':
 		case 'vector2':
 		case 'vector3':
 		case 'vector4':
 
-			return VectorKeyframeTrack;
+			return VectorKeyframeTrack$1;
 
 		case 'color':
 
-			return ColorKeyframeTrack;
+			return ColorKeyframeTrack$1;
 
 		case 'quaternion':
 
-			return QuaternionKeyframeTrack;
+			return QuaternionKeyframeTrack$1;
 
 		case 'bool':
 		case 'boolean':
 
-			return BooleanKeyframeTrack;
+			return BooleanKeyframeTrack$1;
 
 		case 'string':
 
-			return StringKeyframeTrack;
+			return StringKeyframeTrack$1;
 
 	}
 
@@ -33175,7 +36791,7 @@ function getTrackTypeForValueTypeName( typeName ) {
 
 }
 
-function parseKeyframeTrack( json ) {
+function parseKeyframeTrack$1( json ) {
 
 	if ( json.type === undefined ) {
 
@@ -33183,13 +36799,13 @@ function parseKeyframeTrack( json ) {
 
 	}
 
-	const trackType = getTrackTypeForValueTypeName( json.type );
+	const trackType = getTrackTypeForValueTypeName$1( json.type );
 
 	if ( json.times === undefined ) {
 
 		const times = [], values = [];
 
-		AnimationUtils.flattenJSON( json.keys, times, values, 'value' );
+		AnimationUtils$1.flattenJSON( json.keys, times, values, 'value' );
 
 		json.times = times;
 		json.values = values;
@@ -33210,7 +36826,7 @@ function parseKeyframeTrack( json ) {
 
 }
 
-Object.assign( AnimationClip, {
+Object.assign( AnimationClip$1, {
 
 	parse: function ( json ) {
 
@@ -33220,11 +36836,11 @@ Object.assign( AnimationClip, {
 
 		for ( let i = 0, n = jsonTracks.length; i !== n; ++ i ) {
 
-			tracks.push( parseKeyframeTrack( jsonTracks[ i ] ).scale( frameTime ) );
+			tracks.push( parseKeyframeTrack$1( jsonTracks[ i ] ).scale( frameTime ) );
 
 		}
 
-		return new AnimationClip( json.name, json.duration, tracks, json.blendMode );
+		return new AnimationClip$1( json.name, json.duration, tracks, json.blendMode );
 
 	},
 
@@ -33245,7 +36861,7 @@ Object.assign( AnimationClip, {
 
 		for ( let i = 0, n = clipTracks.length; i !== n; ++ i ) {
 
-			tracks.push( KeyframeTrack.toJSON( clipTracks[ i ] ) );
+			tracks.push( KeyframeTrack$1.toJSON( clipTracks[ i ] ) );
 
 		}
 
@@ -33270,9 +36886,9 @@ Object.assign( AnimationClip, {
 
 			values.push( 0, 1, 0 );
 
-			const order = AnimationUtils.getKeyframeOrder( times );
-			times = AnimationUtils.sortedArray( times, 1, order );
-			values = AnimationUtils.sortedArray( values, 1, order );
+			const order = AnimationUtils$1.getKeyframeOrder( times );
+			times = AnimationUtils$1.sortedArray( times, 1, order );
+			values = AnimationUtils$1.sortedArray( values, 1, order );
 
 			// if there is a key at the first frame, duplicate it as the
 			// last frame as well for perfect loop.
@@ -33284,14 +36900,14 @@ Object.assign( AnimationClip, {
 			}
 
 			tracks.push(
-				new NumberKeyframeTrack(
+				new NumberKeyframeTrack$1(
 					'.morphTargetInfluences[' + morphTargetSequence[ i ].name + ']',
 					times, values
 				).scale( 1.0 / fps ) );
 
 		}
 
-		return new AnimationClip( name, - 1, tracks );
+		return new AnimationClip$1( name, - 1, tracks );
 
 	},
 
@@ -33357,7 +36973,7 @@ Object.assign( AnimationClip, {
 
 		for ( const name in animationToMorphTargets ) {
 
-			clips.push( AnimationClip.CreateFromMorphTargetSequence( name, animationToMorphTargets[ name ], fps, noLoop ) );
+			clips.push( AnimationClip$1.CreateFromMorphTargetSequence( name, animationToMorphTargets[ name ], fps, noLoop ) );
 
 		}
 
@@ -33383,7 +36999,7 @@ Object.assign( AnimationClip, {
 				const times = [];
 				const values = [];
 
-				AnimationUtils.flattenJSON( animationKeys, times, values, propertyName );
+				AnimationUtils$1.flattenJSON( animationKeys, times, values, propertyName );
 
 				// empty keys are filtered out, so check again
 				if ( times.length !== 0 ) {
@@ -33453,7 +37069,7 @@ Object.assign( AnimationClip, {
 
 					}
 
-					tracks.push( new NumberKeyframeTrack( '.morphTargetInfluence[' + morphTargetName + ']', times, values ) );
+					tracks.push( new NumberKeyframeTrack$1( '.morphTargetInfluence[' + morphTargetName + ']', times, values ) );
 
 				}
 
@@ -33466,15 +37082,15 @@ Object.assign( AnimationClip, {
 				const boneName = '.bones[' + bones[ h ].name + ']';
 
 				addNonemptyTrack(
-					VectorKeyframeTrack, boneName + '.position',
+					VectorKeyframeTrack$1, boneName + '.position',
 					animationKeys, 'pos', tracks );
 
 				addNonemptyTrack(
-					QuaternionKeyframeTrack, boneName + '.quaternion',
+					QuaternionKeyframeTrack$1, boneName + '.quaternion',
 					animationKeys, 'rot', tracks );
 
 				addNonemptyTrack(
-					VectorKeyframeTrack, boneName + '.scale',
+					VectorKeyframeTrack$1, boneName + '.scale',
 					animationKeys, 'scl', tracks );
 
 			}
@@ -33487,7 +37103,7 @@ Object.assign( AnimationClip, {
 
 		}
 
-		const clip = new AnimationClip( clipName, duration, tracks, blendMode );
+		const clip = new AnimationClip$1( clipName, duration, tracks, blendMode );
 
 		return clip;
 
@@ -33495,7 +37111,7 @@ Object.assign( AnimationClip, {
 
 } );
 
-Object.assign( AnimationClip.prototype, {
+Object.assign( AnimationClip$1.prototype, {
 
 	resetDuration: function () {
 
@@ -33564,13 +37180,13 @@ Object.assign( AnimationClip.prototype, {
 
 		}
 
-		return new AnimationClip( this.name, this.duration, tracks, this.blendMode );
+		return new AnimationClip$1( this.name, this.duration, tracks, this.blendMode );
 
 	}
 
 } );
 
-const Cache = {
+const Cache$1 = {
 
 	enabled: false,
 
@@ -33610,7 +37226,7 @@ const Cache = {
 
 };
 
-function LoadingManager( onLoad, onProgress, onError ) {
+function LoadingManager$1( onLoad, onProgress, onError ) {
 
 	const scope = this;
 
@@ -33745,11 +37361,11 @@ function LoadingManager( onLoad, onProgress, onError ) {
 
 }
 
-const DefaultLoadingManager = new LoadingManager();
+const DefaultLoadingManager$1 = new LoadingManager$1();
 
-function Loader( manager ) {
+function Loader$1( manager ) {
 
-	this.manager = ( manager !== undefined ) ? manager : DefaultLoadingManager;
+	this.manager = ( manager !== undefined ) ? manager : DefaultLoadingManager$1;
 
 	this.crossOrigin = 'anonymous';
 	this.withCredentials = false;
@@ -33759,7 +37375,7 @@ function Loader( manager ) {
 
 }
 
-Object.assign( Loader.prototype, {
+Object.assign( Loader$1.prototype, {
 
 	load: function ( /* url, onLoad, onProgress, onError */ ) {},
 
@@ -33814,17 +37430,17 @@ Object.assign( Loader.prototype, {
 
 } );
 
-const loading = {};
+const loading$1 = {};
 
-function FileLoader( manager ) {
+function FileLoader$1( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+FileLoader$1.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
-	constructor: FileLoader,
+	constructor: FileLoader$1,
 
 	load: function ( url, onLoad, onProgress, onError ) {
 
@@ -33836,7 +37452,7 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		const scope = this;
 
-		const cached = Cache.get( url );
+		const cached = Cache$1.get( url );
 
 		if ( cached !== undefined ) {
 
@@ -33856,9 +37472,9 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		// Check if request is duplicate
 
-		if ( loading[ url ] !== undefined ) {
+		if ( loading$1[ url ] !== undefined ) {
 
-			loading[ url ].push( {
+			loading$1[ url ].push( {
 
 				onLoad: onLoad,
 				onProgress: onProgress,
@@ -33964,9 +37580,9 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 			// Initialise array for duplicate requests
 
-			loading[ url ] = [];
+			loading$1[ url ] = [];
 
-			loading[ url ].push( {
+			loading$1[ url ].push( {
 
 				onLoad: onLoad,
 				onProgress: onProgress,
@@ -33982,9 +37598,9 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 				const response = this.response;
 
-				const callbacks = loading[ url ];
+				const callbacks = loading$1[ url ];
 
-				delete loading[ url ];
+				delete loading$1[ url ];
 
 				if ( this.status === 200 || this.status === 0 ) {
 
@@ -33995,7 +37611,7 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 					// Add to cache only on HTTP success, so that we do not cache
 					// error response bodies as proper responses to requests.
-					Cache.add( url, response );
+					Cache$1.add( url, response );
 
 					for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
 
@@ -34024,7 +37640,7 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 			request.addEventListener( 'progress', function ( event ) {
 
-				const callbacks = loading[ url ];
+				const callbacks = loading$1[ url ];
 
 				for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
 
@@ -34037,9 +37653,9 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 			request.addEventListener( 'error', function ( event ) {
 
-				const callbacks = loading[ url ];
+				const callbacks = loading$1[ url ];
 
-				delete loading[ url ];
+				delete loading$1[ url ];
 
 				for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
 
@@ -34055,9 +37671,9 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 			request.addEventListener( 'abort', function ( event ) {
 
-				const callbacks = loading[ url ];
+				const callbacks = loading$1[ url ];
 
-				delete loading[ url ];
+				delete loading$1[ url ];
 
 				for ( let i = 0, il = callbacks.length; i < il; i ++ ) {
 
@@ -34110,11 +37726,11 @@ FileLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 function AnimationLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-AnimationLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+AnimationLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: AnimationLoader,
 
@@ -34122,7 +37738,7 @@ AnimationLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		const scope = this;
 
-		const loader = new FileLoader( scope.manager );
+		const loader = new FileLoader$1( scope.manager );
 		loader.setPath( scope.path );
 		loader.setRequestHeader( scope.requestHeader );
 		loader.setWithCredentials( scope.withCredentials );
@@ -34158,7 +37774,7 @@ AnimationLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		for ( let i = 0; i < json.length; i ++ ) {
 
-			const clip = AnimationClip.parse( json[ i ] );
+			const clip = AnimationClip$1.parse( json[ i ] );
 
 			animations.push( clip );
 
@@ -34178,11 +37794,11 @@ AnimationLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 function CompressedTextureLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-CompressedTextureLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+CompressedTextureLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: CompressedTextureLoader,
 
@@ -34195,7 +37811,7 @@ CompressedTextureLoader.prototype = Object.assign( Object.create( Loader.prototy
 		const texture = new CompressedTexture();
 		texture.image = images;
 
-		const loader = new FileLoader( this.manager );
+		const loader = new FileLoader$1( this.manager );
 		loader.setPath( this.path );
 		loader.setResponseType( 'arraybuffer' );
 		loader.setRequestHeader( this.requestHeader );
@@ -34300,11 +37916,11 @@ CompressedTextureLoader.prototype = Object.assign( Object.create( Loader.prototy
 
 function ImageLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-ImageLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+ImageLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: ImageLoader,
 
@@ -34316,7 +37932,7 @@ ImageLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		const scope = this;
 
-		const cached = Cache.get( url );
+		const cached = Cache$1.get( url );
 
 		if ( cached !== undefined ) {
 
@@ -34341,7 +37957,7 @@ ImageLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 			image.removeEventListener( 'load', onImageLoad, false );
 			image.removeEventListener( 'error', onImageError, false );
 
-			Cache.add( url, this );
+			Cache$1.add( url, this );
 
 			if ( onLoad ) onLoad( this );
 
@@ -34382,11 +37998,11 @@ ImageLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 function CubeTextureLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-CubeTextureLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+CubeTextureLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: CubeTextureLoader,
 
@@ -34440,11 +38056,11 @@ CubeTextureLoader.prototype = Object.assign( Object.create( Loader.prototype ), 
 
 function DataTextureLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-DataTextureLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+DataTextureLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: DataTextureLoader,
 
@@ -34454,7 +38070,7 @@ DataTextureLoader.prototype = Object.assign( Object.create( Loader.prototype ), 
 
 		const texture = new DataTexture();
 
-		const loader = new FileLoader( this.manager );
+		const loader = new FileLoader$1( this.manager );
 		loader.setResponseType( 'arraybuffer' );
 		loader.setRequestHeader( this.requestHeader );
 		loader.setPath( this.path );
@@ -34525,11 +38141,11 @@ DataTextureLoader.prototype = Object.assign( Object.create( Loader.prototype ), 
 
 function TextureLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-TextureLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+TextureLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: TextureLoader,
 
@@ -36642,7 +40258,7 @@ HemisphereLight.prototype = Object.assign( Object.create( Light.prototype ), {
 
 } );
 
-function LightShadow( camera ) {
+function LightShadow$1( camera ) {
 
 	this.camera = camera;
 
@@ -36672,7 +40288,7 @@ function LightShadow( camera ) {
 
 }
 
-Object.assign( LightShadow.prototype, {
+Object.assign( LightShadow$1.prototype, {
 
 	_projScreenMatrix: new Matrix4(),
 
@@ -36773,13 +40389,13 @@ Object.assign( LightShadow.prototype, {
 
 function SpotLightShadow() {
 
-	LightShadow.call( this, new PerspectiveCamera( 50, 1, 0.5, 500 ) );
+	LightShadow$1.call( this, new PerspectiveCamera( 50, 1, 0.5, 500 ) );
 
 	this.focus = 1;
 
 }
 
-SpotLightShadow.prototype = Object.assign( Object.create( LightShadow.prototype ), {
+SpotLightShadow.prototype = Object.assign( Object.create( LightShadow$1.prototype ), {
 
 	constructor: SpotLightShadow,
 
@@ -36802,7 +40418,7 @@ SpotLightShadow.prototype = Object.assign( Object.create( LightShadow.prototype 
 
 		}
 
-		LightShadow.prototype.updateMatrices.call( this, light );
+		LightShadow$1.prototype.updateMatrices.call( this, light );
 
 	}
 
@@ -36872,7 +40488,7 @@ SpotLight.prototype = Object.assign( Object.create( Light.prototype ), {
 
 function PointLightShadow() {
 
-	LightShadow.call( this, new PerspectiveCamera( 90, 1, 0.5, 500 ) );
+	LightShadow$1.call( this, new PerspectiveCamera( 90, 1, 0.5, 500 ) );
 
 	this._frameExtents = new Vector2( 4, 2 );
 
@@ -36918,7 +40534,7 @@ function PointLightShadow() {
 
 }
 
-PointLightShadow.prototype = Object.assign( Object.create( LightShadow.prototype ), {
+PointLightShadow.prototype = Object.assign( Object.create( LightShadow$1.prototype ), {
 
 	constructor: PointLightShadow,
 
@@ -37138,27 +40754,27 @@ OrthographicCamera.prototype = Object.assign( Object.create( Camera.prototype ),
 
 } );
 
-function DirectionalLightShadow() {
+function DirectionalLightShadow$1() {
 
-	LightShadow.call( this, new OrthographicCamera( - 5, 5, 5, - 5, 0.5, 500 ) );
+	LightShadow$1.call( this, new OrthographicCamera( - 5, 5, 5, - 5, 0.5, 500 ) );
 
 }
 
-DirectionalLightShadow.prototype = Object.assign( Object.create( LightShadow.prototype ), {
+DirectionalLightShadow$1.prototype = Object.assign( Object.create( LightShadow$1.prototype ), {
 
-	constructor: DirectionalLightShadow,
+	constructor: DirectionalLightShadow$1,
 
 	isDirectionalLightShadow: true,
 
 	updateMatrices: function ( light ) {
 
-		LightShadow.prototype.updateMatrices.call( this, light );
+		LightShadow$1.prototype.updateMatrices.call( this, light );
 
 	}
 
 } );
 
-function DirectionalLight( color, intensity ) {
+function DirectionalLight$1( color, intensity ) {
 
 	Light.call( this, color, intensity );
 
@@ -37169,13 +40785,13 @@ function DirectionalLight( color, intensity ) {
 
 	this.target = new Object3D();
 
-	this.shadow = new DirectionalLightShadow();
+	this.shadow = new DirectionalLightShadow$1();
 
 }
 
-DirectionalLight.prototype = Object.assign( Object.create( Light.prototype ), {
+DirectionalLight$1.prototype = Object.assign( Object.create( Light.prototype ), {
 
-	constructor: DirectionalLight,
+	constructor: DirectionalLight$1,
 
 	isDirectionalLight: true,
 
@@ -37539,13 +41155,13 @@ LightProbe.prototype = Object.assign( Object.create( Light.prototype ), {
 
 function MaterialLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 	this.textures = {};
 
 }
 
-MaterialLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+MaterialLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: MaterialLoader,
 
@@ -37553,7 +41169,7 @@ MaterialLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		const scope = this;
 
-		const loader = new FileLoader( scope.manager );
+		const loader = new FileLoader$1( scope.manager );
 		loader.setPath( scope.path );
 		loader.setRequestHeader( scope.requestHeader );
 		loader.setWithCredentials( scope.withCredentials );
@@ -37966,11 +41582,11 @@ InstancedBufferAttribute.prototype = Object.assign( Object.create( BufferAttribu
 
 function BufferGeometryLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-BufferGeometryLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+BufferGeometryLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: BufferGeometryLoader,
 
@@ -37978,7 +41594,7 @@ BufferGeometryLoader.prototype = Object.assign( Object.create( Loader.prototype 
 
 		const scope = this;
 
-		const loader = new FileLoader( scope.manager );
+		const loader = new FileLoader$1( scope.manager );
 		loader.setPath( scope.path );
 		loader.setRequestHeader( scope.requestHeader );
 		loader.setWithCredentials( scope.withCredentials );
@@ -38023,7 +41639,7 @@ BufferGeometryLoader.prototype = Object.assign( Object.create( Loader.prototype 
 			const buffer = getArrayBuffer( json, interleavedBuffer.buffer );
 
 			const array = new TYPED_ARRAYS[ interleavedBuffer.type ]( buffer );
-			const ib = new InterleavedBuffer( array, interleavedBuffer.stride );
+			const ib = new InterleavedBuffer$1( array, interleavedBuffer.stride );
 			ib.uuid = interleavedBuffer.uuid;
 
 			interleavedBufferMap[ uuid ] = ib;
@@ -38068,7 +41684,7 @@ BufferGeometryLoader.prototype = Object.assign( Object.create( Loader.prototype 
 			if ( attribute.isInterleavedBufferAttribute ) {
 
 				const interleavedBuffer = getInterleavedBuffer( json.data, attribute.data );
-				bufferAttribute = new InterleavedBufferAttribute( interleavedBuffer, attribute.itemSize, attribute.offset, attribute.normalized );
+				bufferAttribute = new InterleavedBufferAttribute$1( interleavedBuffer, attribute.itemSize, attribute.offset, attribute.normalized );
 
 			} else {
 
@@ -38101,7 +41717,7 @@ BufferGeometryLoader.prototype = Object.assign( Object.create( Loader.prototype 
 					if ( attribute.isInterleavedBufferAttribute ) {
 
 						const interleavedBuffer = getInterleavedBuffer( json.data, attribute.data );
-						bufferAttribute = new InterleavedBufferAttribute( interleavedBuffer, attribute.itemSize, attribute.offset, attribute.normalized );
+						bufferAttribute = new InterleavedBufferAttribute$1( interleavedBuffer, attribute.itemSize, attribute.offset, attribute.normalized );
 
 					} else {
 
@@ -38181,7 +41797,7 @@ const TYPED_ARRAYS = {
 	Float64Array: Float64Array
 };
 
-function ImageBitmapLoader( manager ) {
+function ImageBitmapLoader$1( manager ) {
 
 	if ( typeof createImageBitmap === 'undefined' ) {
 
@@ -38195,15 +41811,15 @@ function ImageBitmapLoader( manager ) {
 
 	}
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 	this.options = { premultiplyAlpha: 'none' };
 
 }
 
-ImageBitmapLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+ImageBitmapLoader$1.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
-	constructor: ImageBitmapLoader,
+	constructor: ImageBitmapLoader$1,
 
 	isImageBitmapLoader: true,
 
@@ -38225,7 +41841,7 @@ ImageBitmapLoader.prototype = Object.assign( Object.create( Loader.prototype ), 
 
 		const scope = this;
 
-		const cached = Cache.get( url );
+		const cached = Cache$1.get( url );
 
 		if ( cached !== undefined ) {
 
@@ -38256,7 +41872,7 @@ ImageBitmapLoader.prototype = Object.assign( Object.create( Loader.prototype ), 
 
 		} ).then( function ( imageBitmap ) {
 
-			Cache.add( url, imageBitmap );
+			Cache$1.add( url, imageBitmap );
 
 			if ( onLoad ) onLoad( imageBitmap );
 
@@ -38709,11 +42325,11 @@ function createPath( char, scale, offsetX, offsetY, data ) {
 
 function FontLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-FontLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+FontLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: FontLoader,
 
@@ -38721,7 +42337,7 @@ FontLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		const scope = this;
 
-		const loader = new FileLoader( this.manager );
+		const loader = new FileLoader$1( this.manager );
 		loader.setPath( this.path );
 		loader.setRequestHeader( this.requestHeader );
 		loader.setWithCredentials( scope.withCredentials );
@@ -38782,11 +42398,11 @@ const AudioContext = {
 
 function AudioLoader( manager ) {
 
-	Loader.call( this, manager );
+	Loader$1.call( this, manager );
 
 }
 
-AudioLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+AudioLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 	constructor: AudioLoader,
 
@@ -38794,7 +42410,7 @@ AudioLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
 
 		const scope = this;
 
-		const loader = new FileLoader( scope.manager );
+		const loader = new FileLoader$1( scope.manager );
 		loader.setResponseType( 'arraybuffer' );
 		loader.setPath( scope.path );
 		loader.setRequestHeader( scope.requestHeader );
@@ -41947,7 +45563,7 @@ AnimationMixer.prototype = Object.assign( Object.create( EventDispatcher.prototy
 
 		if ( interpolant === undefined ) {
 
-			interpolant = new LinearInterpolant(
+			interpolant = new LinearInterpolant$1(
 				new Float32Array( 2 ), new Float32Array( 2 ),
 				1, this._controlInterpolantsResultBuffer );
 
@@ -41987,7 +45603,7 @@ AnimationMixer.prototype = Object.assign( Object.create( EventDispatcher.prototy
 		const root = optionalRoot || this._root,
 			rootUuid = root.uuid;
 
-		let clipObject = typeof clip === 'string' ? AnimationClip.findByName( root, clip ) : clip;
+		let clipObject = typeof clip === 'string' ? AnimationClip$1.findByName( root, clip ) : clip;
 
 		const clipUuid = clipObject !== null ? clipObject.uuid : clip;
 
@@ -42050,7 +45666,7 @@ AnimationMixer.prototype = Object.assign( Object.create( EventDispatcher.prototy
 			rootUuid = root.uuid,
 
 			clipObject = typeof clip === 'string' ?
-				AnimationClip.findByName( root, clip ) : clip,
+				AnimationClip$1.findByName( root, clip ) : clip,
 
 			clipUuid = clipObject ? clipObject.uuid : clip,
 
@@ -42261,13 +45877,13 @@ class Uniform {
 
 function InstancedInterleavedBuffer( array, stride, meshPerAttribute ) {
 
-	InterleavedBuffer.call( this, array, stride );
+	InterleavedBuffer$1.call( this, array, stride );
 
 	this.meshPerAttribute = meshPerAttribute || 1;
 
 }
 
-InstancedInterleavedBuffer.prototype = Object.assign( Object.create( InterleavedBuffer.prototype ), {
+InstancedInterleavedBuffer.prototype = Object.assign( Object.create( InterleavedBuffer$1.prototype ), {
 
 	constructor: InstancedInterleavedBuffer,
 
@@ -42275,7 +45891,7 @@ InstancedInterleavedBuffer.prototype = Object.assign( Object.create( Interleaved
 
 	copy: function ( source ) {
 
-		InterleavedBuffer.prototype.copy.call( this, source );
+		InterleavedBuffer$1.prototype.copy.call( this, source );
 
 		this.meshPerAttribute = source.meshPerAttribute;
 
@@ -42285,7 +45901,7 @@ InstancedInterleavedBuffer.prototype = Object.assign( Object.create( Interleaved
 
 	clone: function ( data ) {
 
-		const ib = InterleavedBuffer.prototype.clone.call( this, data );
+		const ib = InterleavedBuffer$1.prototype.clone.call( this, data );
 
 		ib.meshPerAttribute = this.meshPerAttribute;
 
@@ -42295,7 +45911,7 @@ InstancedInterleavedBuffer.prototype = Object.assign( Object.create( Interleaved
 
 	toJSON: function ( data ) {
 
-		const json = InterleavedBuffer.prototype.toJSON.call( this, data );
+		const json = InterleavedBuffer$1.prototype.toJSON.call( this, data );
 
 		json.isInstancedInterleavedBuffer = true;
 		json.meshPerAttribute = this.meshPerAttribute;
@@ -42856,7 +46472,7 @@ Object.assign( Spline.prototype, {
 
 //
 
-Object.assign( Loader.prototype, {
+Object.assign( Loader$1.prototype, {
 
 	extractUrlBase: function ( url ) {
 
@@ -42867,7 +46483,7 @@ Object.assign( Loader.prototype, {
 
 } );
 
-Loader.Handlers = {
+Loader$1.Handlers = {
 
 	add: function ( /* regex, loader */ ) {
 
@@ -43805,7 +47421,7 @@ Object.defineProperties( Raycaster.prototype, {
 
 } );
 
-Object.defineProperties( InterleavedBuffer.prototype, {
+Object.defineProperties( InterleavedBuffer$1.prototype, {
 
 	dynamic: {
 		get: function () {
@@ -43824,7 +47440,7 @@ Object.defineProperties( InterleavedBuffer.prototype, {
 
 } );
 
-Object.assign( InterleavedBuffer.prototype, {
+Object.assign( InterleavedBuffer$1.prototype, {
 	setDynamic: function ( value ) {
 
 		console.warn( 'THREE.InterleavedBuffer: .setDynamic() has been deprecated. Use .setUsage() instead.' );
@@ -44566,7 +48182,7 @@ var GLTFLoader = ( function () {
 
 	function GLTFLoader( manager ) {
 
-		Loader.call( this, manager );
+		Loader$1.call( this, manager );
 
 		this.dracoLoader = null;
 		this.ddsLoader = null;
@@ -44613,7 +48229,7 @@ var GLTFLoader = ( function () {
 
 	}
 
-	GLTFLoader.prototype = Object.assign( Object.create( Loader.prototype ), {
+	GLTFLoader.prototype = Object.assign( Object.create( Loader$1.prototype ), {
 
 		constructor: GLTFLoader,
 
@@ -44991,7 +48607,7 @@ var GLTFLoader = ( function () {
 		var lightDef = lightDefs[ lightIndex ];
 		var lightNode;
 
-		var color = new Color( 0xffffff );
+		var color = new Color$1( 0xffffff );
 
 		if ( lightDef.color !== undefined ) color.fromArray( lightDef.color );
 
@@ -45086,7 +48702,7 @@ var GLTFLoader = ( function () {
 
 		var pending = [];
 
-		materialParams.color = new Color( 1.0, 1.0, 1.0 );
+		materialParams.color = new Color$1( 1.0, 1.0, 1.0 );
 		materialParams.opacity = 1.0;
 
 		var metallicRoughness = materialDef.pbrMetallicRoughness;
@@ -45686,7 +49302,7 @@ var GLTFLoader = ( function () {
 		].join( '\n' );
 
 		var uniforms = {
-			specular: { value: new Color().setHex( 0xffffff ) },
+			specular: { value: new Color$1().setHex( 0xffffff ) },
 			glossiness: { value: 1 },
 			specularMap: { value: null },
 			glossinessMap: { value: null }
@@ -45861,7 +49477,7 @@ var GLTFLoader = ( function () {
 
 				var pbrSpecularGlossiness = materialDef.extensions[ this.name ];
 
-				materialParams.color = new Color( 1.0, 1.0, 1.0 );
+				materialParams.color = new Color$1( 1.0, 1.0, 1.0 );
 				materialParams.opacity = 1.0;
 
 				var pending = [];
@@ -45881,9 +49497,9 @@ var GLTFLoader = ( function () {
 
 				}
 
-				materialParams.emissive = new Color( 0.0, 0.0, 0.0 );
+				materialParams.emissive = new Color$1( 0.0, 0.0, 0.0 );
 				materialParams.glossiness = pbrSpecularGlossiness.glossinessFactor !== undefined ? pbrSpecularGlossiness.glossinessFactor : 1.0;
-				materialParams.specular = new Color( 1.0, 1.0, 1.0 );
+				materialParams.specular = new Color$1( 1.0, 1.0, 1.0 );
 
 				if ( Array.isArray( pbrSpecularGlossiness.specularFactor ) ) {
 
@@ -45926,7 +49542,7 @@ var GLTFLoader = ( function () {
 				material.bumpScale = 1;
 
 				material.normalMap = materialParams.normalMap === undefined ? null : materialParams.normalMap;
-				material.normalMapType = TangentSpaceNormalMap;
+				material.normalMapType = TangentSpaceNormalMap$1;
 
 				if ( materialParams.normalScale ) material.normalScale = materialParams.normalScale;
 
@@ -46083,18 +49699,18 @@ var GLTFLoader = ( function () {
 	};
 
 	var WEBGL_FILTERS = {
-		9728: NearestFilter,
-		9729: LinearFilter,
-		9984: NearestMipmapNearestFilter,
-		9985: LinearMipmapNearestFilter,
-		9986: NearestMipmapLinearFilter,
-		9987: LinearMipmapLinearFilter
+		9728: NearestFilter$1,
+		9729: LinearFilter$1,
+		9984: NearestMipmapNearestFilter$1,
+		9985: LinearMipmapNearestFilter$1,
+		9986: NearestMipmapLinearFilter$1,
+		9987: LinearMipmapLinearFilter$1
 	};
 
 	var WEBGL_WRAPPINGS = {
-		33071: ClampToEdgeWrapping,
-		33648: MirroredRepeatWrapping,
-		10497: RepeatWrapping
+		33071: ClampToEdgeWrapping$1,
+		33648: MirroredRepeatWrapping$1,
+		10497: RepeatWrapping$1
 	};
 
 	var WEBGL_TYPE_SIZES = {
@@ -46128,8 +49744,8 @@ var GLTFLoader = ( function () {
 	var INTERPOLATION = {
 		CUBICSPLINE: undefined, // We use a custom interpolant (GLTFCubicSplineInterpolation) for CUBICSPLINE tracks. Each
 		                        // keyframe track will be initialized with a default interpolation type, then modified.
-		LINEAR: InterpolateLinear,
-		STEP: InterpolateDiscrete
+		LINEAR: InterpolateLinear$1,
+		STEP: InterpolateDiscrete$1
 	};
 
 	var ALPHA_MODES = {
@@ -46180,7 +49796,7 @@ var GLTFLoader = ( function () {
 				roughness: 1,
 				transparent: false,
 				depthTest: true,
-				side: FrontSide
+				side: FrontSide$1
 			} );
 
 		}
@@ -46873,7 +50489,7 @@ var GLTFLoader = ( function () {
 
 				}
 
-				bufferAttribute = new BufferAttribute( array, itemSize, normalized );
+				bufferAttribute = new BufferAttribute$1( array, itemSize, normalized );
 
 			}
 
@@ -46892,7 +50508,7 @@ var GLTFLoader = ( function () {
 				if ( bufferView !== null ) {
 
 					// Avoid modifying the original ArrayBuffer, if the bufferView wasn't initialized with zeroes.
-					bufferAttribute = new BufferAttribute( bufferAttribute.array.slice(), bufferAttribute.itemSize, bufferAttribute.normalized );
+					bufferAttribute = new BufferAttribute$1( bufferAttribute.array.slice(), bufferAttribute.itemSize, bufferAttribute.normalized );
 
 				}
 
@@ -47042,15 +50658,15 @@ var GLTFLoader = ( function () {
 			if ( textureDef.name ) texture.name = textureDef.name;
 
 			// When there is definitely no alpha channel in the texture, set RGBFormat to save space.
-			if ( ! hasAlpha ) texture.format = RGBFormat;
+			if ( ! hasAlpha ) texture.format = RGBFormat$1;
 
 			var samplers = json.samplers || {};
 			var sampler = samplers[ textureDef.sampler ] || {};
 
-			texture.magFilter = WEBGL_FILTERS[ sampler.magFilter ] || LinearFilter;
-			texture.minFilter = WEBGL_FILTERS[ sampler.minFilter ] || LinearMipmapLinearFilter;
-			texture.wrapS = WEBGL_WRAPPINGS[ sampler.wrapS ] || RepeatWrapping;
-			texture.wrapT = WEBGL_WRAPPINGS[ sampler.wrapT ] || RepeatWrapping;
+			texture.magFilter = WEBGL_FILTERS[ sampler.magFilter ] || LinearFilter$1;
+			texture.minFilter = WEBGL_FILTERS[ sampler.minFilter ] || LinearMipmapLinearFilter$1;
+			texture.wrapS = WEBGL_WRAPPINGS[ sampler.wrapS ] || RepeatWrapping$1;
+			texture.wrapT = WEBGL_WRAPPINGS[ sampler.wrapT ] || RepeatWrapping$1;
 
 			parser.associations.set( texture, {
 				type: 'textures',
@@ -47268,7 +50884,7 @@ var GLTFLoader = ( function () {
 
 			var metallicRoughness = materialDef.pbrMetallicRoughness || {};
 
-			materialParams.color = new Color( 1.0, 1.0, 1.0 );
+			materialParams.color = new Color$1( 1.0, 1.0, 1.0 );
 			materialParams.opacity = 1.0;
 
 			if ( Array.isArray( metallicRoughness.baseColorFactor ) ) {
@@ -47312,7 +50928,7 @@ var GLTFLoader = ( function () {
 
 		if ( materialDef.doubleSided === true ) {
 
-			materialParams.side = DoubleSide;
+			materialParams.side = DoubleSide$1;
 
 		}
 
@@ -47365,7 +50981,7 @@ var GLTFLoader = ( function () {
 
 		if ( materialDef.emissiveFactor !== undefined && materialType !== MeshBasicMaterial ) {
 
-			materialParams.emissive = new Color().fromArray( materialDef.emissiveFactor );
+			materialParams.emissive = new Color$1().fromArray( materialDef.emissiveFactor );
 
 		}
 
@@ -47392,8 +51008,8 @@ var GLTFLoader = ( function () {
 			if ( materialDef.name ) material.name = materialDef.name;
 
 			// baseColorTexture, emissiveTexture, and specularGlossinessTexture use sRGB encoding.
-			if ( material.map ) material.map.encoding = sRGBEncoding;
-			if ( material.emissiveMap ) material.emissiveMap.encoding = sRGBEncoding;
+			if ( material.map ) material.map.encoding = sRGBEncoding$1;
+			if ( material.emissiveMap ) material.emissiveMap.encoding = sRGBEncoding$1;
 
 			assignExtrasToUserData( material, materialDef );
 
@@ -47433,7 +51049,7 @@ var GLTFLoader = ( function () {
 
 		var attributes = primitiveDef.attributes;
 
-		var box = new Box3();
+		var box = new Box3$1();
 
 		if ( attributes.POSITION !== undefined ) {
 
@@ -47729,7 +51345,7 @@ var GLTFLoader = ( function () {
 				} else {
 
 					// Otherwise create a new geometry
-					geometryPromise = addPrimitiveAttributes( new BufferGeometry(), primitive, parser );
+					geometryPromise = addPrimitiveAttributes( new BufferGeometry$1(), primitive, parser );
 
 				}
 
@@ -47863,7 +51479,7 @@ var GLTFLoader = ( function () {
 
 			}
 
-			var group = new Group();
+			var group = new Group$1();
 
 			for ( var i = 0, il = meshes.length; i < il; i ++ ) {
 
@@ -48011,26 +51627,26 @@ var GLTFLoader = ( function () {
 
 					case PATH_PROPERTIES.weights:
 
-						TypedKeyframeTrack = NumberKeyframeTrack;
+						TypedKeyframeTrack = NumberKeyframeTrack$1;
 						break;
 
 					case PATH_PROPERTIES.rotation:
 
-						TypedKeyframeTrack = QuaternionKeyframeTrack;
+						TypedKeyframeTrack = QuaternionKeyframeTrack$1;
 						break;
 
 					case PATH_PROPERTIES.position:
 					case PATH_PROPERTIES.scale:
 					default:
 
-						TypedKeyframeTrack = VectorKeyframeTrack;
+						TypedKeyframeTrack = VectorKeyframeTrack$1;
 						break;
 
 				}
 
 				var targetName = node.name ? node.name : node.uuid;
 
-				var interpolation = sampler.interpolation !== undefined ? INTERPOLATION[ sampler.interpolation ] : InterpolateLinear;
+				var interpolation = sampler.interpolation !== undefined ? INTERPOLATION[ sampler.interpolation ] : InterpolateLinear$1;
 
 				var targetNames = [];
 
@@ -48216,7 +51832,7 @@ var GLTFLoader = ( function () {
 
 			} else if ( objects.length > 1 ) {
 
-				node = new Group();
+				node = new Group$1();
 
 			} else if ( objects.length === 1 ) {
 
@@ -48399,7 +52015,7 @@ var GLTFLoader = ( function () {
 
 			// Loader returns Group, not Scene.
 			// See: https://github.com/mrdoob/three.js/issues/18342#issuecomment-578981172
-			var scene = new Group();
+			var scene = new Group$1();
 			if ( sceneDef.name ) scene.name = parser.createUniqueName( sceneDef.name );
 
 			assignExtrasToUserData( scene, sceneDef );
