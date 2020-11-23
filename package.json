@@ -2,6 +2,7 @@
   "scripts": {
     "start": "snowpack dev",
     "build": "snowpack build",
+    "dist": "run-s build rollup-build",
     "rollup-dev": "rollup -c --environment DEV",
     "rollup-build": "rollup -c --environment PROD",
     "rollup-ammo-dev": "rollup -c rollup.ammo.config.js --environment DEV",
@@ -18,6 +19,7 @@
     "ammojs-wasm-typed": "^1.1.0",
     "cross-env": "^7.0.2",
     "gh-pages": "^3.1.0",
+    "npm-run-all": "^4.1.5",
     "rollup": "^2.33.3",
     "rollup-plugin-copy": "^3.3.0",
     "rollup-plugin-filesize": "^9.0.2",

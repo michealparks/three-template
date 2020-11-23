@@ -1,5 +1,5 @@
 const ghpages = require('gh-pages')
-const dir = 'build'
+const dir = 'dist'
 
 ghpages.publish(dir, (err) => {
   if (err) console.error(err)
