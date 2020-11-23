@@ -1,4 +1,4 @@
-import { a as BufferGeometry, F as Float32BufferAttribute } from './BufferGeometry-1ddfff5d.js';
+import { a as BufferGeometry, F as Float32BufferAttribute } from './BufferGeometry-e3f10757.js';
 
 class PlaneBufferGeometry extends BufferGeometry {
 

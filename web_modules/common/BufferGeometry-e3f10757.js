@@ -1,5 +1,5 @@
 import { E as EventDispatcher } from './EventDispatcher-a257053d.js';
-import { S as StaticDrawUsage } from './constants-4ff93c6e.js';
+import { S as StaticDrawUsage } from './constants-52370c26.js';
 import { M as MathUtils } from './MathUtils-943fb228.js';
 import { V as Vector3 } from './Vector3-df4ff999.js';
 import { V as Vector2 } from './Vector2-323a1dbe.js';

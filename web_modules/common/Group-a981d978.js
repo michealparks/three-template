@@ -1,7 +1,7 @@
 import { V as Vector3 } from './Vector3-df4ff999.js';
 import { O as Object3D } from './Object3D-2bcaf382.js';
-import { S as Sphere } from './BufferGeometry-1ddfff5d.js';
-import { P as Plane } from './Ray-cab0c6cd.js';
+import { S as Sphere } from './BufferGeometry-e3f10757.js';
+import { P as Plane } from './Mesh-771e5968.js';
 
 const _sphere = /*@__PURE__*/ new Sphere();
 const _vector = /*@__PURE__*/ new Vector3();

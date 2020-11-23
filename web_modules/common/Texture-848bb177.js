@@ -1,5 +1,5 @@
 import { E as EventDispatcher } from './EventDispatcher-a257053d.js';
-import { U as UVMapping, k as MirroredRepeatWrapping, C as ClampToEdgeWrapping, f as RepeatWrapping, L as LinearFilter, e as LinearMipmapLinearFilter, u as RGBAFormat, v as UnsignedByteType, w as LinearEncoding } from './constants-4ff93c6e.js';
+import { U as UVMapping, l as MirroredRepeatWrapping, C as ClampToEdgeWrapping, g as RepeatWrapping, L as LinearFilter, f as LinearMipmapLinearFilter, d as RGBAFormat, w as UnsignedByteType, x as LinearEncoding } from './constants-52370c26.js';
 import { M as MathUtils } from './MathUtils-943fb228.js';
 import { V as Vector2 } from './Vector2-323a1dbe.js';
 import { M as Matrix3 } from './Matrix3-f848f439.js';
