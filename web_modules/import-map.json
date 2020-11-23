@@ -1,6 +1,5 @@
 {
   "imports": {
-    "cannon-es": "./cannon-es.js",
     "three/examples/jsm/controls/OrbitControls": "./three/examples/jsm/controls/OrbitControls.js",
     "three/examples/jsm/loaders/GLTFLoader": "./three/examples/jsm/loaders/GLTFLoader.js",
     "three/examples/jsm/postprocessing/EffectComposer": "./three/examples/jsm/postprocessing/EffectComposer.js",
@@ -12,6 +11,7 @@
     "three/src/geometries/BoxBufferGeometry": "./three/src/geometries/BoxBufferGeometry.js",
     "three/src/lights/AmbientLight": "./three/src/lights/AmbientLight.js",
     "three/src/materials/MeshStandardMaterial": "./three/src/materials/MeshStandardMaterial.js",
+    "three/src/math/Box3": "./three/src/math/Box3.js",
     "three/src/math/Vector2": "./three/src/math/Vector2.js",
     "three/src/math/Vector3": "./three/src/math/Vector3.js",
     "three/src/objects/Mesh": "./three/src/objects/Mesh.js",

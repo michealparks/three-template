@@ -1,5 +1,5 @@
 import { V as Vector3 } from './Vector3-df4ff999.js';
-import { B as BufferGeometry, F as Float32BufferAttribute } from './BufferGeometry-473ac695.js';
+import { B as BufferGeometry, F as Float32BufferAttribute } from './BufferGeometry-a26ddb44.js';
 
 class BoxBufferGeometry extends BufferGeometry {
 

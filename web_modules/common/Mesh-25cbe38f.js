@@ -1,7 +1,7 @@
 import { f as MultiplyOperation, B as BackSide, D as DoubleSide } from './constants-2d5769b7.js';
 import { V as Vector3 } from './Vector3-df4ff999.js';
 import { V as Vector2 } from './Vector2-323a1dbe.js';
-import { S as Sphere, B as BufferGeometry } from './BufferGeometry-473ac695.js';
+import { S as Sphere, B as BufferGeometry } from './BufferGeometry-a26ddb44.js';
 import { M as Matrix4, O as Object3D } from './Object3D-2bcaf382.js';
 import { M as Matrix3 } from './Matrix3-f848f439.js';
 import { C as Color } from './Color-6fe630de.js';
