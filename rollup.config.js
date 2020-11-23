@@ -1,5 +1,3 @@
-import { nodeResolve } from '@rollup/plugin-node-resolve'
-import typescript from '@rollup/plugin-typescript'
 import replace from '@rollup/plugin-replace'
 import { terser } from 'rollup-plugin-terser'
 import filesize from 'rollup-plugin-filesize'
@@ -8,19 +6,15 @@ const { DEV, PROD } = process.env
 
 export default [
   {
-    input: 'src/index.ts',
+    input: 'build/index.js',
     output: {
-      file: 'public/js/index.js',
+      file: 'dist/index.js',
       format: 'es'
     },
     plugins: [
       replace({
         'import.meta.env.MODE': '"production"'
       }),
-      typescript({
-        incremental: false
-      }),
-      nodeResolve(),
       PROD && terser({
         compress: {
           drop_console: true,

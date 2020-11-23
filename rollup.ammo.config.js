@@ -13,6 +13,9 @@ export default {
   }, {
     file: 'build/ammo.js',
     format: 'es'
+  }, {
+    file: 'dist/ammo.js',
+    format: 'es'
   }],
   plugins: [
     alias({
@@ -26,6 +29,9 @@ export default {
         {
           src: 'node_modules/ammo.js/builds/ammo.wasm.wasm',
           dest: 'public'
+        }, {
+          src: 'node_modules/ammo.js/builds/ammo.wasm.wasm',
+          dest: 'dist'
         }
       ]
     }),
