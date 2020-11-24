@@ -10,6 +10,7 @@ import Stats from 'three/examples/jsm/libs/stats.module.js'
 import { webglRenderer } from './webglRenderer'
 import { gltf } from './gltf'
 import { orbitControls } from './controls/orbit'
+import { keyboardControls } from './controls/keyboard'
 import { physics } from './physics'
 
 let stats: any
@@ -26,6 +27,8 @@ const geometry = new BoxBufferGeometry()
 const material = new MeshStandardMaterial({ color: 0x00ff00 })
 const cube = new Mesh(geometry, material)
 cube.position.y = 5
+cube.castShadow = true
+cube.receiveShadow = true
 scene.add(cube)
 
 camera.position.set(5, 5, 5)
@@ -36,7 +39,8 @@ const intensity = 1
 const ambientLight = new AmbientLight(color, intensity)
 scene.add(ambientLight)
 
-const controls = orbitControls(camera, webglRenderer.canvas)
+const keyControls = keyboardControls()
+const debugControls = orbitControls(camera, webglRenderer.canvas)
 
 let now = 0, dt = 0, then = 0
 
@@ -47,7 +51,7 @@ const frame = () => {
 
   stats.update()
   physics.tick(dt * 0.001)
-  controls.update()
+  debugControls.update()
 }
 
 const init = async () => {

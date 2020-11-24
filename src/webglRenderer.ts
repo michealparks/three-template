@@ -9,6 +9,7 @@ import { WebGLRenderer } from 'three/src/renderers/WebGLRenderer'
 import { WebGLMultisampleRenderTarget } from 'three/src/renderers/WebGLMultisampleRenderTarget'
 import { ACESFilmicToneMapping, sRGBEncoding, RGBFormat } from 'three/src/constants'
 import { Vector2 } from 'three/src/math/Vector2'
+import { Color } from 'three/src/math/Color'
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement
 
@@ -31,9 +32,11 @@ const fxaaPass = new ShaderPass(FXAAShader)
 
 const init = (scene: Scene, camera: PerspectiveCamera) => {
   renderer.toneMapping = ACESFilmicToneMapping
-  // renderer.toneMappingExposure = 3.5
+  renderer.toneMappingExposure = 1.0
   renderer.outputEncoding = sRGBEncoding
   renderer.physicallyCorrectLights = true
+  renderer.shadowMap.enabled = true
+  renderer.setClearColor(0x00000)
 
   composer.addPass(new RenderPass(scene, camera))
   composer.addPass(fxaaPass)
@@ -55,6 +58,8 @@ const render = (scene: Scene, camera: PerspectiveCamera) => {
 
   fxaaPass.material.uniforms.resolution.value.x = 1.0 / width
   fxaaPass.material.uniforms.resolution.value.y = 1.0 / height
+
+  
 
   renderer.setSize(width, height, false)
   composer.setSize(width, height)

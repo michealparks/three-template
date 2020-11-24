@@ -79,6 +79,9 @@ const setRigidbodiesFromScene = (scene: Scene) => {
   scene.traverse((object) => {
     const { components = '' } = object.userData
 
+    object.castShadow = true
+    object.receiveShadow = true
+
     if (components.includes('static_rigidbody')) {
       // addBox(object as Mesh, { mass: 0 })
     } else if (components.includes('rigidbody')) {

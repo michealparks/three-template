@@ -93,10 +93,10 @@ const addBox = (
   }
 
   const bodyInfo = new ammo.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia)
-  bodyInfo.restitution = 0.5
-  bodyInfo.friction = 0.5
 
   const body = new ammo.btRigidBody(bodyInfo)
+  body.setRestitution(0.5)
+  body.setFriction(0.5)
   
   ammo.destroy(bodyInfo)
   ammo.destroy(localInertia)
