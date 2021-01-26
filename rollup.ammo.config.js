@@ -2,6 +2,7 @@ import alias from '@rollup/plugin-alias'
 import copy from 'rollup-plugin-copy'
 import { terser } from 'rollup-plugin-terser'
 import filesize from 'rollup-plugin-filesize'
+import { terser as terserConfig } from './scripts/configs'
 
 const { DEV, PROD } = process.env
 
@@ -9,7 +10,8 @@ export default {
   input: 'node_modules/ammo.js/builds/ammo.wasm.js',
   output: [{
     file: 'public/ammo.js',
-    format: 'iife'
+    format: 'es',
+    banner: 'self.exports=self;'
   }],
   plugins: [
     alias({
@@ -26,17 +28,7 @@ export default {
         }
       ]
     }),
-    PROD && terser({
-      compress: {
-        drop_console: true,
-        ecma: '2020',
-        keep_infinity: true,
-        passes: 2
-      },
-      format: {
-        comments: false
-      }
-    }),
+    PROD && terser(terserConfig),
     PROD && filesize()
   ]
 }
