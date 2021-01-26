@@ -1,6 +1,6 @@
 {
   "include": ["./src/**/*.ts"],
-  "typeRoots": ["node_modules/ammojs-wasm-typed/ammo/ambient"],
+  "typeRoots": [],
   "types": [],
   "lib": ["dom"],
   "compilerOptions": {

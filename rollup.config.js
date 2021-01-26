@@ -2,6 +2,7 @@ import replace from '@rollup/plugin-replace'
 import copy from 'rollup-plugin-copy'
 import { terser } from 'rollup-plugin-terser'
 import filesize from 'rollup-plugin-filesize'
+import { terser as terserConfig } from './scripts/configs'
 
 const { DEV, PROD } = process.env
 
@@ -17,47 +18,22 @@ export default [
         'import.meta.env.MODE': '"production"'
       }),
       copy({
-        targets: [
-          {
-            src: 'public/*',
-            dest: 'dist'
-          }
-        ]
+        targets: [{ src: 'public/*', dest: 'dist' }]
       }),
-      PROD && terser({
-        compress: {
-          drop_console: true,
-          ecma: '2017',
-          keep_infinity: true,
-          passes: 2
-        },
-        format: {
-          comments: false
-        }
-      }),
+      PROD && terser(terserConfig),
       PROD && filesize()
     ]
   }, {
     input: 'build/physicsWorker.js',
     output: {
       file: 'dist/physicsWorker.js',
-      format: 'iife'
+      format: 'es'
     },
     plugins: [
       replace({
         'import.meta.env.MODE': '"production"'
       }),
-      PROD && terser({
-        compress: {
-          drop_console: true,
-          ecma: '2017',
-          keep_infinity: true,
-          passes: 2
-        },
-        format: {
-          comments: false
-        }
-      }),
+      PROD && terser(terserConfig),
       PROD && filesize()
     ]
   }
