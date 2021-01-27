@@ -1,77 +1,65 @@
-import { Scene } from 'three/src/scenes/Scene'
-import { PerspectiveCamera } from 'three/src/cameras/PerspectiveCamera'
-import { BoxBufferGeometry } from 'three/src/geometries/BoxBufferGeometry'
-import { MeshStandardMaterial } from 'three/src/materials/MeshStandardMaterial'
-import { Mesh } from 'three/src/objects/Mesh'
-import { Vector3 } from 'three/src/math/Vector3'
-import { AmbientLight } from 'three/src/lights/AmbientLight'
-import Stats from 'three/examples/jsm/libs/stats.module.js'
+import {
+  BoxGeometry,
+  MeshStandardMaterial,
+  Mesh,
+  Vector3
+} from 'three'
 
-import { webglRenderer } from './webglRenderer'
-import { gltf } from './gltf'
 import { orbitControls } from './controls/orbit'
 import { keyboardControls } from './controls/keyboard'
-import { physics } from './physics'
+import { physics } from './core/physics'
+import { gl } from './core/gl'
+import { assets } from './core/assets'
+import { GLTF } from './core/gltf'
 
-let stats: any
-
-const scene = new Scene()
-
-const fov = 50.0
-const aspect = window.innerWidth / window.innerHeight
-const near = 0.1
-const far = 1000.0
-const camera = new PerspectiveCamera(fov, aspect, near, far)
-
-const geometry = new BoxBufferGeometry()
-const material = new MeshStandardMaterial({ color: 0x00ff00 })
-const cube = new Mesh(geometry, material)
-cube.position.y = 5
-cube.castShadow = true
-cube.receiveShadow = true
-scene.add(cube)
-
-camera.position.set(5, 5, 5)
-camera.lookAt(new Vector3())
-
-const color = 0xEFC070
-const intensity = 1
-const ambientLight = new AmbientLight(color, intensity)
-scene.add(ambientLight)
+{
+  const geometry = new BoxGeometry()
+  const material = new MeshStandardMaterial({ color: 0x00ff00 })
+  const cube = new Mesh(geometry, material)
+  cube.position.y = 5
+  cube.castShadow = true
+  cube.receiveShadow = true
+  gl.scene.add(cube)
+}
 
 const keyControls = keyboardControls()
-const debugControls = orbitControls(camera, webglRenderer.canvas)
+const debugControls = orbitControls(gl.camera, gl.canvas)
 
-let now = 0, dt = 0, then = 0
-
-const frame = () => {
-  now = performance.now()
-  dt = now - then
-  then = now
-
-  stats.update()
-  physics.tick(dt * 0.001)
+const frame = (dt: number) => {
+  // physics.tick(dt * 0.001)
   debugControls.update()
 }
 
 const init = async () => {
-  gltf.init('assets/glb/')
-  webglRenderer.init(scene, camera)
+  assets.queue(
+    'pixel_room.glb',
+    '2d.glb'
+  )
 
-  const [bedroom] = await Promise.all([
-    gltf.append('pixel_room.glb', scene),
-    physics.init()
+  await Promise.all([
+    physics.init(),
+    assets.load()
   ])
 
-  physics.addBox(bedroom.scene.getObjectByName('Floor'), { mass: 0 })
-  physics.setRigidbodiesFromScene(bedroom.scene)
-  physics.addBox(cube)
+  const gltf = GLTF.parse(assets.get('2d.glb'), {
+    shadows: true
+  })
 
-  // @ts-ignore
-  stats = new Stats()
-  document.body.appendChild(stats.dom)
 
-  webglRenderer.runRenderLoop(scene, camera, frame)
+  gl.scene.add(gltf.scene)
+  gl.setCamera(gltf.cameras[0])
+
+  gl.ambientLight.intensity = 0.1
+
+  console.log(gltf)
+
+  await gl.init()
+
+  // physics.addBox(bedroom.scene.getObjectByName('Floor'), { mass: 0 })
+  // physics.setRigidbodiesFromScene(bedroom.scene)
+  // physics.addBox(cube)
+
+  gl.setAnimationLoop(frame)
 }
 
 init()

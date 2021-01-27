@@ -1,5 +1,5 @@
 /** @type {import("snowpack").SnowpackUserConfig } */
-export default {
+module.exports = {
   mount: {
     public: '/',
     src: '/'
@@ -19,7 +19,7 @@ export default {
     '**/__tests__/*',
     '**/*.@(spec|test).@(js|mjs)'
   ],
-  installOptions: {
+  packageOptions: {
     installTypes: true
   },
 }
