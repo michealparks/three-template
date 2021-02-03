@@ -54,6 +54,7 @@ export class Sprite {
 
     texture.encoding = sRGBEncoding
     texture.matrixAutoUpdate = false
+    texture.generateMipmaps = false
     texture.magFilter = NearestFilter
     texture.minFilter = NearestFilter
     texture.repeat =  new Vector2(1.0 / this.tiles, 1.0)
