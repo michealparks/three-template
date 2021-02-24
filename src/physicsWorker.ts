@@ -7,30 +7,52 @@ import type {
   Vector3
 } from 'three'
 
-import './ammo.js'
+importScripts('ammo.js')
 
-import {
-  GRAVITY,
-  MAX_SUBSTEPS,
-  FIXED_TIMESTEP,
-  MAX_PLAYER_SPEED,
-  BODYFLAG_STATIC_OBJECT,
-  BODYFLAG_NORESPONSE_OBJECT,
-  BODYGROUP_STATIC,
-  BODYMASK_NOT_STATIC,
-  BODYTYPE_DYNAMIC,
-  BODYGROUP_DYNAMIC,
-  BODYMASK_ALL,
-  BODYTYPE_KINEMATIC,
-  BODYFLAG_KINEMATIC_OBJECT,
-  BODYSHAPE_MESH,
-  BODYTYPE_STATIC,
-  BODYSTATE_DISABLE_DEACTIVATION,
-  BODYSHAPE_BOX,
-  BODYSHAPE_SPHERE
-} from './core/constants'
+const MAX_SUBSTEPS = 40
+const FIXED_TIMESTEP = 1 / 60
+const GRAVITY = -9.8
 
-import { MathUtils } from 'three/src/math/MathUtils'
+// Rigid body has infinite mass and cannot move.
+const BODYTYPE_STATIC = 0
+
+// Rigid body is simulated according to applied forces.
+const BODYTYPE_DYNAMIC = 1
+
+// Rigid body has infinite mass and does not respond to forces but can still be moved by setting their velocity or position.
+const BODYTYPE_KINEMATIC = 2
+
+// Collision shapes
+const BODYSHAPE_BOX = 0
+const BODYSHAPE_SPHERE = 1
+const BODYSHAPE_MESH = 2
+
+// Collision flags
+const BODYFLAG_STATIC_OBJECT = 1
+const BODYFLAG_KINEMATIC_OBJECT = 2
+const BODYFLAG_NORESPONSE_OBJECT = 4
+
+// Activation states
+const BODYSTATE_ACTIVE_TAG = 1
+const BODYSTATE_ISLAND_SLEEPING = 2
+const BODYSTATE_WANTS_DEACTIVATION = 3
+const BODYSTATE_DISABLE_DEACTIVATION = 4
+const BODYSTATE_DISABLE_SIMULATION = 5
+
+// Groups
+const BODYGROUP_NONE = 0
+const BODYGROUP_DEFAULT = 1
+const BODYGROUP_DYNAMIC = 1
+const BODYGROUP_STATIC = 2
+const BODYGROUP_KINEMATIC = 4
+const BODYGROUP_TRIGGER = 16
+
+// Masks
+const BODYMASK_NONE = 0
+const BODYMASK_ALL = 65535
+const BODYMASK_STATIC = 2
+const BODYMASK_NOT_STATIC = 65535 ^ 2
+const BODYMASK_NOT_STATIC_KINEMATIC = 65535 ^ (2 | 4)
 
 const dynamicBodies = new Set<any>()
 const bodyMap = new Map<number, any>()
@@ -70,11 +92,6 @@ const init = async () => {
 
   world = new ammo.btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration)
   world.setGravity(new ammo.btVector3(0, GRAVITY, 0))
-  
-  if (import.meta.env.MODE === 'development') {
-    const { physicsDraw } = await import('./debug/physicsDraw')
-    physicsDraw.init(ammo, world)
-  }
 
   // @ts-ignore
   postMessage({ op: 'init' })
@@ -90,18 +107,6 @@ const update = (transforms: Float32Array) => {
   i = 0
   for (body of dynamicBodies) {
     if (body.isActive() === true) {
-      // @TODO make this generic, allow a random body to be clamped
-      if (body.name === 'Player') {
-        const v = body.getLinearVelocity()
-        const x = MathUtils.clamp(v.x(), -MAX_PLAYER_SPEED, MAX_PLAYER_SPEED)
-        const y = MathUtils.clamp(v.y(), -MAX_PLAYER_SPEED, MAX_PLAYER_SPEED)
-        const z = MathUtils.clamp(v.z(), -MAX_PLAYER_SPEED, MAX_PLAYER_SPEED)
-  
-        ammoVec.setValue(x, y, z)
-        ammo.destroy(v)
-        body.setLinearVelocity(ammoVec)
-      }
-
       motionState = body.getMotionState()
       motionState.getWorldTransform(ammoTransform)
       position = ammoTransform.getOrigin()
@@ -556,5 +561,3 @@ onmessage = ({ data }) => {
 }
 
 init()
-
-export {}

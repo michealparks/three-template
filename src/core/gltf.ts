@@ -1,6 +1,5 @@
 import {
   MeshStandardMaterial,
-  Group,
   BufferGeometry,
   SpotLight,
 } from 'three'
@@ -190,8 +189,6 @@ const parse = (gltf: any, params: GLTFParams) => {
       object.visible = false
     }
 
-    console.log(params)
-
     // Set param options
     if (params.shadows === true) {
       if (object instanceof Light) {
@@ -214,13 +211,6 @@ const parse = (gltf: any, params: GLTFParams) => {
 
     if (object instanceof Mesh) {
       const material = object.material
-
-      console.log(material)
-
-      if (material instanceof MeshStandardMaterial) {
-        console.log('here')
-        material.flatShading = true
-      }
 
       // Init flat texture object component
       if (components.includes('sprite') === true && material instanceof MeshStandardMaterial) {

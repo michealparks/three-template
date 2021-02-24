@@ -51,8 +51,6 @@ const init = async () => {
 
   gl.ambientLight.intensity = 0.1
 
-  console.log(gltf)
-
   await gl.init()
 
   // physics.addBox(bedroom.scene.getObjectByName('Floor'), { mass: 0 })

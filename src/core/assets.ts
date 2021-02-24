@@ -27,8 +27,17 @@ const loadJSON = async (file: string) => {
   cache.set(file, await response.json())
 }
 
+const loadText = async (file: string, path: string) => {
+  const response = await fetch(`assets/${path}/${file}`)
+  cache.set(file, await response.text())
+}
+
 const loadTexture = async (file: string) => {
   cache.set(file, await textureLoader.loadAsync(file))
+}
+
+const loadAudio = async (file: string) => {
+  cache.set(file, await audioLoader.loadAsync(file))
 }
 
 const loadGLTF = async (file: string) => {
@@ -51,10 +60,12 @@ const loadSprite = async (file: string) => {
 const loadOne = (file: string) => {
   switch (file.split('.').pop()) {
     case 'glb': return loadGLTF(file)
-    case 'png': return loadTexture(file)
-    case 'mp3': return audioLoader.loadAsync(file)
+    case 'png': case 'jpg': return loadTexture(file)
+    case 'mp3': return loadAudio(file)
     case 'json': return loadJSON(file)
     case 'sprite': return loadSprite(file)
+    case 'obj': return loadText(file, 'obj')
+    case 'glsl': return loadText(file, 'glsl')
   }
 }
 
@@ -64,12 +75,15 @@ const get = (file: string) => {
 
 const queue = (...args: string[]) => {
   queueMany(args)
+  return assets
 }
 
 const queueMany = (iterable: string[] | Set<string>) => {
   for (const file of iterable) {
+    if (cache.has(file)) continue
     queued.add(file)
   }
+  return assets
 }
 
 const on = (event: string, fn: Listener) => {
@@ -78,7 +92,11 @@ const on = (event: string, fn: Listener) => {
   }
 }
 
-const load = () => {
+const load = (...args: string[]) => {
+  if (args.length > 0) {
+    queueMany(args)
+  }
+
   for (const file of queued) {
     promises.add(loadOne(file))
   }

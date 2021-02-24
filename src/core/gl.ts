@@ -9,8 +9,8 @@ import {
   HalfFloatType,
   AmbientLight,
   AudioListener,
-  Camera,
-  OrthographicCamera
+  OrthographicCamera,
+  Clock
 } from 'three'
 
 import {
@@ -21,11 +21,8 @@ import {
   SMAAImageLoader,
   SMAAPreset,
   BloomEffect,
-  BlendFunction,
   KernelSize,
-  SSAOEffect,
-  NormalPass,
-  DepthEffect
+  DepthOfFieldEffect
   // @ts-ignore
 } from 'postprocessing'
 
@@ -38,7 +35,8 @@ import {
   FAR,
   FOV,
   NEAR,
-  SHADOWMAP
+  SHADOWMAP,
+  PASSIVE
 } from './constants'
 
 const renderer = new WebGLRenderer({
@@ -59,13 +57,14 @@ renderer.setClearColor(CLEARCOLOR)
 document.body.append(renderer.domElement)
 
 let fn: Tick
-let then = 0, now = 0, dt = 0
 
+const clock = new Clock()
 const stats = new Stats({ maxFPS: Infinity, maxMem: Infinity })
 const canvas = renderer.domElement
 const composer = new EffectComposer(renderer, {
   frameBufferType: HalfFloatType
 })
+const effects = new Map()
 const scene = new Scene()
 let camera: PerspectiveCamera | OrthographicCamera = new PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, NEAR, FAR)
 const listener = new AudioListener()
@@ -84,27 +83,46 @@ scene.add(ambientLight)
 const init = async () => {
   const bloomEffect = new BloomEffect({
     height: 480,
+    intensity: 1.5,
     kernelSize: KernelSize.VERY_LARGE
   })
+  effects.set('bloom', bloomEffect)
 
-  const smaaImageLoader  = new SMAAImageLoader()
+  const smaaImageLoader = new SMAAImageLoader()
 
   const [search, area] = await new Promise((resolve) =>
     smaaImageLoader.load(resolve)
   )
 
   const smaaEffect = new SMAAEffect(search, area, SMAAPreset.ULTRA)
+  effects.set('smaa', smaaEffect)
 
-  const effectPass = new EffectPass(
-    camera,
-    smaaEffect,
-    bloomEffect
-  )
-
-  effectPass.renderToScreen = true
+  const dofEffect = new DepthOfFieldEffect(camera, {
+    bokehScale: 10
+  })
+  effects.set('dof', dofEffect)
 
   composer.addPass(new RenderPass(scene, camera))
-  composer.addPass(effectPass)
+  composer.addPass(new EffectPass(
+    camera,
+    smaaEffect,
+    bloomEffect,
+    // dofEffect
+  ))
+
+  window.addEventListener('blur', () => toggleRenderer(false), PASSIVE)
+  window.addEventListener('focus', () => toggleRenderer(true), PASSIVE)
+  document.addEventListener('visibilitychange', () => 
+    toggleRenderer(document.visibilityState === 'visible'),
+  PASSIVE)
+}
+
+const toggleRenderer = (active: boolean) => {
+  if (active) {
+    renderer.setAnimationLoop(render)
+  } else {
+    renderer.setAnimationLoop(null)
+  }
 }
 
 const render = () => {
@@ -112,16 +130,16 @@ const render = () => {
     stats.begin()
   }
 
-  now = performance.now()
-  dt = now - then
-  then = now
+  const dt = clock.getDelta()
+  const elapsed = clock.getElapsedTime()
 
   TWEEN.update()
 
-  fn(dt)
+  fn(dt, elapsed)
 
-  let width = canvas.clientWidth * window.devicePixelRatio | 0
-  let height = canvas.clientHeight * window.devicePixelRatio | 0
+  const dpi = Math.min(window.devicePixelRatio, 2)
+  let width = canvas.clientWidth * dpi | 0
+  let height = canvas.clientHeight * dpi | 0
   let zoom = 300
 
   if (canvas.width === width && canvas.height === height) {
@@ -160,6 +178,7 @@ const setCamera = (newCamera: PerspectiveCamera | OrthographicCamera) => {
 }
 
 export const gl = {
+  effects,
   stats,
   renderer,
   canvas,

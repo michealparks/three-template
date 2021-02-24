@@ -17,7 +17,7 @@ import {
 
 import { app } from './app'
 
-const worker = new Worker('physicsWorker.js', { type: 'module' })
+const worker = new Worker('physicsWorker.js')
 const bodyMap = new Map<number, Object3D>()
 const dynamicBodies = new Set<Object3D>()
 
