@@ -61,9 +61,7 @@ let fn: Tick
 const clock = new Clock()
 const stats = new Stats({ maxFPS: Infinity, maxMem: Infinity })
 const canvas = renderer.domElement
-const composer = new EffectComposer(renderer, {
-  frameBufferType: HalfFloatType
-})
+const composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType })
 const effects = new Map()
 const scene = new Scene()
 let camera: PerspectiveCamera | OrthographicCamera = new PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, NEAR, FAR)
@@ -97,10 +95,10 @@ const init = async () => {
   const smaaEffect = new SMAAEffect(search, area, SMAAPreset.ULTRA)
   effects.set('smaa', smaaEffect)
 
-  const dofEffect = new DepthOfFieldEffect(camera, {
-    bokehScale: 10
-  })
-  effects.set('dof', dofEffect)
+  // const dofEffect = new DepthOfFieldEffect(camera, {
+  //   bokehScale: 10
+  // })
+  // effects.set('dof', dofEffect)
 
   composer.addPass(new RenderPass(scene, camera))
   composer.addPass(new EffectPass(
