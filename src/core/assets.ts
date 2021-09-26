@@ -24,24 +24,34 @@ const cache = new Map()
 
 const loadJSON = async (file: string) => {
   const response = await fetch(`assets/json/${file}`)
-  cache.set(file, await response.json())
+  const json = await response.json()
+  cache.set(file, json)
+  return json
 }
 
 const loadText = async (file: string, path: string) => {
   const response = await fetch(`assets/${path}/${file}`)
-  cache.set(file, await response.text())
+  const text = await response.text()
+  cache.set(file, text)
+  return text
 }
 
 const loadTexture = async (file: string) => {
-  cache.set(file, await textureLoader.loadAsync(file))
+  const texture = await textureLoader.loadAsync(file)
+  cache.set(file, texture)
+  return texture
 }
 
 const loadAudio = async (file: string) => {
-  cache.set(file, await audioLoader.loadAsync(file))
+  const audio = await audioLoader.loadAsync(file)
+  cache.set(file, audio)
+  return audio
 }
 
 const loadGLTF = async (file: string) => {
-  cache.set(file, await gltfLoader.loadAsync(file))
+  const gltf = await gltfLoader.loadAsync(file)
+  cache.set(file, gltf)
+  return gltf
 }
 
 const loadSprite = async (file: string) => {
@@ -50,11 +60,19 @@ const loadSprite = async (file: string) => {
     textureLoader.loadAsync(file.replace('sprite', 'png'))
   ])
 
-  cache.set(file, {
+  const sprite = {
     frames: data.frames,
     meta: data.meta,
     texture: tex
-  })
+  }
+
+  cache.set(file, sprite)
+
+  return sprite
+}
+
+const get = (file: string) => {
+  return cache.get(file)
 }
 
 const loadOne = (file: string) => {
@@ -69,58 +87,14 @@ const loadOne = (file: string) => {
   }
 }
 
-const get = (file: string) => {
-  return cache.get(file)
-}
-
-const queue = (...args: string[]) => {
-  queueMany(args)
-  return assets
-}
-
-const queueMany = (iterable: string[] | Set<string>) => {
-  for (const file of iterable) {
-    if (cache.has(file)) continue
-    queued.add(file)
-  }
-  return assets
-}
-
-const on = (event: string, fn: Listener) => {
-  switch (event) {
-    case 'load': return listeners.add(fn)
-  }
-}
-
-const load = (...args: string[]) => {
-  if (args.length > 0) {
-    queueMany(args)
-  }
-
-  for (const file of queued) {
-    promises.add(loadOne(file))
-  }
-
-  return Promise.all(promises).then(() => {
-    for (const listener of listeners) {
-      listener()
-    }
-
-    queued.clear()
-    promises.clear()
-  })
+const load = (file: string) => {
+  return get(file) ?? loadOne(file)
 }
 
 export const assets = {
   cache,
   manager,
-  textureLoader,
-  audioLoader,
-  gltfLoader,
   get,
-  queue,
-  queueMany,
-  on,
   load,
   loadOne
 }

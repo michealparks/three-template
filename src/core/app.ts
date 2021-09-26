@@ -1,12 +1,11 @@
+const events = new Map<string, Set<EventListener>>()
 
-const events = new Map<string, any>()
-
-const on = (name: string, listener: any) => {
+const on = (name: string, listener: EventListener) => {
   if (events.has(name) === false) {
     events.set(name, new Set())
   }
 
-  events.get(name).add(listener)
+  events.get(name)!.add(listener)
 }
 
 const fire = (name: string, data: any) => {
@@ -14,16 +13,16 @@ const fire = (name: string, data: any) => {
     return console.warn('No global listners for fired event ', name)
   }
 
-  for (const listener of events.get(name)) {
+  for (const listener of events.get(name)!) {
     listener(data)
   }
 }
 
-const off = (name: string, listener: any) => {
-  events.get(name).delete(listener)
+const off = (name: string, listener: EventListener) => {
+  events.get(name)!.delete(listener)
 }
 
-const once = (name: string, listener: any) => {
+const once = (name: string, listener: EventListener) => {
   const wrappedListener = (data: any) => {
     listener(data)
     off(name, wrappedListener)

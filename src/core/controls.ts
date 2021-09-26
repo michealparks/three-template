@@ -35,7 +35,7 @@ const update = () => {
 }
 
 const handleKey = (key: string, pressed: number) => {
-  switch (key.toLowerCase()) {
+  switch (key) {
     case 'a':
     case 'arrowleft':
       return (state[0] = -1 * pressed)
@@ -55,21 +55,25 @@ const handleKey = (key: string, pressed: number) => {
   }
 }
 
-const handleKeyDown = ({ key }: { key: string }) => {
+const handleKeyDown = (e: KeyboardEvent) => {
+  const key = e.key.toLowerCase()
+
   if (pressedKeys.has(key) === true) {
     return
   }
 
   keyboardControlling = true
 
-  pressedKeys.add(key)
+  pressedKeys.add(key.toLowerCase())
 
   for (const key of pressedKeys) {
     handleKey(key, 1)
   }
 }
 
-const handleKeyUp = ({ key }: { key: string }) => {
+const handleKeyUp = (e: KeyboardEvent) => {
+  const key = e.key.toLowerCase()
+
   pressedKeys.delete(key)
 
   handleKey(key, 0)

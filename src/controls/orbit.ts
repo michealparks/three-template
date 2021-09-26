@@ -1,4 +1,4 @@
-import type { PerspectiveCamera } from 'three/src/cameras/PerspectiveCamera'
+import type { PerspectiveCamera } from 'three'
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 
@@ -12,4 +12,3 @@ export const orbitControls = (camera: PerspectiveCamera, canvas: HTMLCanvasEleme
   controls.maxPolarAngle = Math.PI / 2.0
   return controls
 }
-
